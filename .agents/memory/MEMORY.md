@@ -1,0 +1,6 @@
+- [Expo + Supabase inline-component pitfall](expo-inline-component-anti-pattern.md) — never define a component inside another component's render body in Expo/RN; causes "Invalid hook call".
+- [Sandbox has no process.env](codeexecution-sandbox-no-process-env.md) — CodeExecution sandbox can't read process.env; use ShellExec/bash for admin/service-role API calls needing secrets.
+- [Supabase Postgres direct-connection gotchas](supabase-direct-connection-gotchas.md) — use the Session Pooler host for DDL (IPv6-only direct host), and strip stray `[`/`]` from pasted connection strings.
+- [Restoring an uploaded zip snapshot of this monorepo template](restoring-uploaded-monorepo-zip.md) — how to diff a zip's artifact against the current scaffold and merge safely.
+- [Supabase realtime unsubscribe pitfall](supabase-realtime-unsubscribe.md) — use `supabase.removeChannel()`, not just `channel.unsubscribe()`, or remounts reuse a stale crashing channel.
+- [Verify spec docs against live app](verify-spec-docs-against-live-app.md) — uploaded project spec docs can claim wrong DB triggers/status strings; check real code + live DB.
