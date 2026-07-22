@@ -507,9 +507,14 @@ export async function submitRadiologyCase(caseData: {
   symptoms?: string;
   assigned_radiologist_name?: string;
   scan_image_uri?: string | null;
+  /** MP4 or other video file URI to upload alongside or instead of the image */
+  scan_video_uri?: string | null;
+  /** Original filename of the video (used for extension detection) */
+  scan_video_name?: string | null;
 }) {
   let fileUrl: string | null = null;
 
+  // Upload image scan (if provided)
   if (caseData.scan_image_uri) {
     try {
       const ext = caseData.scan_image_uri.split(".").pop()?.split("?")[0] ?? "jpg";
@@ -518,6 +523,20 @@ export async function submitRadiologyCase(caseData: {
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("radiology-scans")
         .upload(fileName, blob, { contentType: `image/${ext}`, upsert: true });
+      if (!uploadError) fileUrl = uploadData.path;
+    } catch {}
+  }
+
+  // Upload video scan (MP4 / video/*) — overwrites fileUrl so the video is the primary attachment
+  if (caseData.scan_video_uri) {
+    try {
+      const ext = (caseData.scan_video_name ?? caseData.scan_video_uri).split(".").pop()?.split("?")[0] ?? "mp4";
+      const contentType = ext === "mp4" ? "video/mp4" : `video/${ext}`;
+      const fileName = `${caseData.submitted_by}/${Date.now()}_scan.${ext}`;
+      const blob = await fetch(caseData.scan_video_uri).then((r) => r.blob());
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("radiology-scans")
+        .upload(fileName, blob, { contentType, upsert: true });
       if (!uploadError) fileUrl = uploadData.path;
     } catch {}
   }
@@ -781,9 +800,10 @@ export async function getInstitutionByUserId(userId: string): Promise<Institutio
 }
 
 export async function upsertInstitution(inst: Institution) {
+  // Use userId as the conflict key so re-registrations update the existing row
   const { error } = await supabase
     .from("institutions")
-    .upsert(inst, { onConflict: "id" });
+    .upsert(inst, { onConflict: "userId" });
   if (error) throw error;
 }
 

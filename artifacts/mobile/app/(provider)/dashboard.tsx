@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import * as DocumentPicker from "expo-document-picker";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
@@ -22,6 +23,7 @@ import { useColors } from "@/hooks/useColors";
 import {
   getProviderStats,
   getAppointmentsForProvider,
+  getInstitutions,
   subscribeToProviderBookings,
   updateAppointmentStatus,
   updateBookingStatus,
@@ -31,10 +33,11 @@ import {
   signOut as supabaseSignOut,
   uploadProfileImage,
   submitRadiologyReport,
+  submitRadiologyCase,
   getRadiologyQueue,
   unsubscribeChannel,
+  type Institution,
 } from "@/lib/supabase";
-import { ADDIS_HOSPITALS } from "@/data/ethiopianHospitals";
 
 type DashTab = "requests" | "services" | "schedule" | "location" | "radiologist";
 
@@ -106,6 +109,17 @@ export default function ProviderDashboard() {
   const [showHospitalPicker, setShowHospitalPicker] = useState(false);
   const [customHospital, setCustomHospital] = useState("");
   const [hospitalSaving, setHospitalSaving] = useState(false);
+  const [supabaseInstitutes, setSupabaseInstitutes] = useState<Institution[]>([]);
+
+  // ── Radiology submit-case state ───────────────────────────────────────────
+  const [showSubmitCase, setShowSubmitCase] = useState(false);
+  const [caseSubmitting, setCaseSubmitting] = useState(false);
+  const [scanFile, setScanFile] = useState<{ name: string; uri: string; type: string; isVideo: boolean } | null>(null);
+  const [caseForm, setCaseForm] = useState({
+    patient_name: "", patient_age: "", patient_gender: "Male",
+    scan_type: "Chest X-Ray", body_part: "", urgency: "routine", symptoms: "",
+  });
+
   const [selectedCase, setSelectedCase] = useState<typeof MOCK_RADIOLOGY_CASES[0] | null>(null);
   const [radioFindings, setRadioFindings] = useState("");
   const [radioImpression, setRadioImpression] = useState("");
@@ -171,6 +185,8 @@ export default function ProviderDashboard() {
 
   useEffect(() => {
     if (!user?.id) return;
+    // Load active institutions for the Working Institute picker
+    getInstitutions().then(setSupabaseInstitutes).catch(() => {});
     // Load stats
     getProviderStats(user.id).then((s) => setStats(s)).catch(() => {});
     // Load appointments
@@ -309,6 +325,64 @@ export default function ProviderDashboard() {
 
   const updateSlot = (id: string, field: string, value: any) => {
     setScheduleSlots((prev) => prev.map((s) => s.id === id ? { ...s, [field]: value } : s));
+  };
+
+  const pickScanFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["image/jpeg", "image/png", "image/jpg", "video/mp4", "video/quicktime", "video/*"],
+        copyToCacheDirectory: true,
+      });
+      if (result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const mimeType = asset.mimeType ?? "";
+        setScanFile({
+          name: asset.name,
+          uri: asset.uri,
+          type: mimeType,
+          isVideo: mimeType.startsWith("video/") || asset.name.toLowerCase().endsWith(".mp4"),
+        });
+      }
+    } catch {
+      Alert.alert("Error", "Could not pick file. Please try again.");
+    }
+  };
+
+  const handleSubmitNewCase = async () => {
+    if (!caseForm.patient_name.trim()) { Alert.alert("Missing Info", "Please enter the patient's name."); return; }
+    if (!caseForm.body_part.trim()) { Alert.alert("Missing Info", "Please enter the body part."); return; }
+    if (!scanFile) { Alert.alert("Missing Scan", "Please attach the scan image or video before submitting."); return; }
+    if (!user?.id) return;
+
+    setCaseSubmitting(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await submitRadiologyCase({
+        submitted_by: user.id,
+        patient_name: caseForm.patient_name.trim(),
+        patient_age: parseInt(caseForm.patient_age) || 0,
+        patient_gender: caseForm.patient_gender,
+        scan_type: caseForm.scan_type,
+        body_part: caseForm.body_part.trim(),
+        urgency: caseForm.urgency,
+        symptoms: caseForm.symptoms.trim() || undefined,
+        scan_image_uri: (!scanFile.isVideo) ? scanFile.uri : null,
+        scan_video_uri: scanFile.isVideo ? scanFile.uri : null,
+        scan_video_name: scanFile.isVideo ? scanFile.name : null,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Case Submitted", `Radiology case for ${caseForm.patient_name} has been submitted and will appear in the review queue.`, [
+        { text: "OK", onPress: () => {
+          setShowSubmitCase(false);
+          setScanFile(null);
+          setCaseForm({ patient_name: "", patient_age: "", patient_gender: "Male", scan_type: "Chest X-Ray", body_part: "", urgency: "routine", symptoms: "" });
+        }},
+      ]);
+    } catch (err: any) {
+      Alert.alert("Submission Failed", err?.message ?? "Could not submit the case. Please check your connection and try again.");
+    } finally {
+      setCaseSubmitting(false);
+    }
   };
 
   const handleSubmitRadiologyReport = async () => {
@@ -613,19 +687,25 @@ export default function ProviderDashboard() {
                   nestedScrollEnabled
                   keyboardShouldPersistTaps="always"
                 >
-                  {ADDIS_HOSPITALS.map((h) => (
-                    <Pressable
-                      key={h.id}
-                      onPress={() => { setCustomHospital(h.name); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                      style={[styles.hospitalPickerItem, { borderBottomColor: borderCol, backgroundColor: customHospital === h.name ? "#315d93" + "12" : "transparent" }]}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.hospitalPickerName, { color: textPrimary }]} numberOfLines={1}>{h.name}</Text>
-                        <Text style={[styles.hospitalPickerType, { color: textMuted }]}>{h.type} · {h.district}</Text>
-                      </View>
-                      {customHospital === h.name && <Feather name="check" size={14} color="#315d93" />}
-                    </Pressable>
-                  ))}
+                  {supabaseInstitutes.length === 0 ? (
+                    <View style={{ padding: 14, alignItems: "center" }}>
+                      <Text style={[styles.hospitalPickerType, { color: textMuted }]}>Loading institutes…</Text>
+                    </View>
+                  ) : (
+                    supabaseInstitutes.map((inst) => (
+                      <Pressable
+                        key={inst.id ?? inst.name}
+                        onPress={() => { setCustomHospital(inst.name); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                        style={[styles.hospitalPickerItem, { borderBottomColor: borderCol, backgroundColor: customHospital === inst.name ? "#315d93" + "12" : "transparent" }]}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.hospitalPickerName, { color: textPrimary }]} numberOfLines={1}>{inst.name}</Text>
+                          <Text style={[styles.hospitalPickerType, { color: textMuted }]}>{inst.category ?? inst.type}{inst.city ? ` · ${inst.city}` : ""}</Text>
+                        </View>
+                        {customHospital === inst.name && <Feather name="check" size={14} color="#315d93" />}
+                      </Pressable>
+                    ))
+                  )}
                 </ScrollView>
                 {/* Custom / free-form entry */}
                 <TextInput
@@ -1153,9 +1233,154 @@ export default function ProviderDashboard() {
                 </View>
               </ScrollView>
             ) : (
-              /* Cases list */
+              /* Cases list + submit new case */
               <>
-                <Text style={[styles.sectionTitle, { color: textPrimary }]}>Radiology Review Queue</Text>
+                {/* Header row */}
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <Text style={[styles.sectionTitle, { color: textPrimary }]}>Radiology Review Queue</Text>
+                  <Pressable
+                    onPress={() => { setShowSubmitCase((v) => !v); setScanFile(null); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: showSubmitCase ? "#DC2626" : "#315d93", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 }}
+                  >
+                    <Feather name={showSubmitCase ? "x" : "plus"} size={14} color="#fff" />
+                    <Text style={{ color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>
+                      {showSubmitCase ? "Cancel" : "New Case"}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {/* ── Submit New Case form ── */}
+                {showSubmitCase && (
+                  <View style={[{ borderRadius: 14, borderWidth: 1, padding: 16, gap: 12 }, { backgroundColor: cardBg, borderColor: "#315d93" + "40" }]}>
+                    <Text style={[styles.sectionTitle, { color: "#315d93", fontSize: 14 }]}>Submit New Radiology Case</Text>
+
+                    {/* Patient Name */}
+                    <View style={{ gap: 4 }}>
+                      <Text style={[styles.formLabel, { color: textMuted }]}>Patient Name *</Text>
+                      <TextInput
+                        style={[styles.reportInput, { backgroundColor: cardBg, borderColor: caseForm.patient_name ? "#315d93" : borderCol, color: textPrimary, minHeight: 44, padding: 12 }]}
+                        placeholder="e.g. Abebe Girma"
+                        placeholderTextColor={textMuted}
+                        value={caseForm.patient_name}
+                        onChangeText={(v) => setCaseForm((p) => ({ ...p, patient_name: v }))}
+                      />
+                    </View>
+
+                    {/* Age + Gender row */}
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={[styles.formLabel, { color: textMuted }]}>Age</Text>
+                        <TextInput
+                          style={[styles.reportInput, { backgroundColor: cardBg, borderColor: borderCol, color: textPrimary, minHeight: 44, padding: 12 }]}
+                          placeholder="Age"
+                          placeholderTextColor={textMuted}
+                          keyboardType="numeric"
+                          value={caseForm.patient_age}
+                          onChangeText={(v) => setCaseForm((p) => ({ ...p, patient_age: v.replace(/\D/g, "") }))}
+                        />
+                      </View>
+                      <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={[styles.formLabel, { color: textMuted }]}>Gender</Text>
+                        <View style={{ flexDirection: "row", gap: 6 }}>
+                          {["Male", "Female"].map((g) => (
+                            <Pressable
+                              key={g}
+                              onPress={() => setCaseForm((p) => ({ ...p, patient_gender: g }))}
+                              style={{ flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: caseForm.patient_gender === g ? "#315d93" : borderCol, backgroundColor: caseForm.patient_gender === g ? "#315d93" + "15" : "transparent" }}
+                            >
+                              <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: caseForm.patient_gender === g ? "#315d93" : textMuted }}>{g}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Scan Type */}
+                    <View style={{ gap: 4 }}>
+                      <Text style={[styles.formLabel, { color: textMuted }]}>Scan Type</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                        {["Chest X-Ray", "Brain MRI", "CT Abdomen", "Pelvic Ultrasound", "Spine MRI", "Bone Scan", "Other"].map((st) => (
+                          <Pressable
+                            key={st}
+                            onPress={() => setCaseForm((p) => ({ ...p, scan_type: st }))}
+                            style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: 1, borderColor: caseForm.scan_type === st ? "#315d93" : borderCol, backgroundColor: caseForm.scan_type === st ? "#315d93" + "15" : "transparent" }}
+                          >
+                            <Text style={{ fontSize: 12, fontFamily: "Inter_500Medium", color: caseForm.scan_type === st ? "#315d93" : textMuted }}>{st}</Text>
+                          </Pressable>
+                        ))}
+                      </ScrollView>
+                    </View>
+
+                    {/* Body Part + Urgency */}
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <View style={{ flex: 2, gap: 4 }}>
+                        <Text style={[styles.formLabel, { color: textMuted }]}>Body Part *</Text>
+                        <TextInput
+                          style={[styles.reportInput, { backgroundColor: cardBg, borderColor: caseForm.body_part ? "#315d93" : borderCol, color: textPrimary, minHeight: 44, padding: 12 }]}
+                          placeholder="e.g. Chest, Brain"
+                          placeholderTextColor={textMuted}
+                          value={caseForm.body_part}
+                          onChangeText={(v) => setCaseForm((p) => ({ ...p, body_part: v }))}
+                        />
+                      </View>
+                      <View style={{ flex: 1, gap: 4 }}>
+                        <Text style={[styles.formLabel, { color: textMuted }]}>Urgency</Text>
+                        {["routine", "priority", "emergency"].map((u) => (
+                          <Pressable
+                            key={u}
+                            onPress={() => setCaseForm((p) => ({ ...p, urgency: u }))}
+                            style={{ alignItems: "center", paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: caseForm.urgency === u ? URGENCY_COLOR[u] : borderCol, backgroundColor: caseForm.urgency === u ? URGENCY_COLOR[u] + "15" : "transparent", marginBottom: 4 }}
+                          >
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_500Medium", color: caseForm.urgency === u ? URGENCY_COLOR[u] : textMuted, textTransform: "capitalize" }}>{u}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+
+                    {/* Symptoms */}
+                    <View style={{ gap: 4 }}>
+                      <Text style={[styles.formLabel, { color: textMuted }]}>Symptoms (optional)</Text>
+                      <TextInput
+                        style={[styles.reportInput, { backgroundColor: cardBg, borderColor: borderCol, color: textPrimary, minHeight: 60, padding: 12 }]}
+                        placeholder="Describe presenting symptoms…"
+                        placeholderTextColor={textMuted}
+                        multiline
+                        textAlignVertical="top"
+                        value={caseForm.symptoms}
+                        onChangeText={(v) => setCaseForm((p) => ({ ...p, symptoms: v }))}
+                      />
+                    </View>
+
+                    {/* Scan file upload — image or MP4 */}
+                    <View style={{ gap: 4 }}>
+                      <Text style={[styles.formLabel, { color: textMuted }]}>Scan File * (Image or MP4 Video)</Text>
+                      <Pressable
+                        onPress={pickScanFile}
+                        style={{ borderWidth: 2, borderStyle: "dashed", borderRadius: 12, padding: 20, alignItems: "center", gap: 8, borderColor: scanFile ? "#059669" : "#315d93" + "60" }}
+                      >
+                        <Feather name={scanFile ? (scanFile.isVideo ? "film" : "image") : "upload"} size={28} color={scanFile ? "#059669" : "#315d93"} />
+                        <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: scanFile ? "#059669" : textPrimary }}>
+                          {scanFile ? scanFile.name : "Tap to upload scan"}
+                        </Text>
+                        <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: textMuted }}>
+                          {scanFile
+                            ? (scanFile.isVideo ? "📹 MP4 video selected" : "🖼 Image selected")
+                            : "JPEG · PNG · MP4 accepted"}
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    <Pressable
+                      onPress={handleSubmitNewCase}
+                      disabled={caseSubmitting}
+                      style={[styles.generateBtn, { opacity: caseSubmitting ? 0.7 : 1 }]}
+                    >
+                      <Feather name={caseSubmitting ? "loader" : "send"} size={18} color="#fff" />
+                      <Text style={styles.generateBtnText}>{caseSubmitting ? "Submitting…" : "Submit Case to Queue"}</Text>
+                    </Pressable>
+                  </View>
+                )}
+
                 <Text style={[styles.sectionDesc, { color: textMuted }]}>Tap a case to open the scan viewer and generate a report.</Text>
 
                 {/* Stats row */}
