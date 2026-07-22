@@ -37,6 +37,7 @@ import {
   getRadiologyQueue,
   unsubscribeChannel,
   type Institution,
+  type RadioCase,
 } from "@/lib/supabase";
 
 type DashTab = "requests" | "services" | "schedule" | "location" | "radiologist";
@@ -101,8 +102,8 @@ export default function ProviderDashboard() {
     { id: "evening", label: "Evening", active: false, from: "7:00 PM", to: "9:00 PM", editingFrom: false, editingTo: false },
   ]);
 
-  // Radiologist review
-  const [radioCases, setRadioCases] = useState(MOCK_RADIOLOGY_CASES);
+  // Radiologist review — seeded with mock data; replaced by Supabase fetch on mount
+  const [radioCases, setRadioCases] = useState<RadioCase[]>(MOCK_RADIOLOGY_CASES);
 
   // ── Working institute state ────────────────────────────────────────────────
   const [currentHospital, setCurrentHospital] = useState("");
@@ -120,7 +121,7 @@ export default function ProviderDashboard() {
     scan_type: "Chest X-Ray", body_part: "", urgency: "routine", symptoms: "",
   });
 
-  const [selectedCase, setSelectedCase] = useState<typeof MOCK_RADIOLOGY_CASES[0] | null>(null);
+  const [selectedCase, setSelectedCase] = useState<RadioCase | null>(null);
   const [radioFindings, setRadioFindings] = useState("");
   const [radioImpression, setRadioImpression] = useState("");
   const [radioRecommendations, setRadioRecommendations] = useState("");
@@ -187,6 +188,8 @@ export default function ProviderDashboard() {
     if (!user?.id) return;
     // Load active institutions for the Working Institute picker
     getInstitutions().then(setSupabaseInstitutes).catch(() => {});
+    // Load radiology queue from Supabase (replaces mock data)
+    getRadiologyQueue(user.id).then(setRadioCases).catch(() => {});
     // Load stats
     getProviderStats(user.id).then((s) => setStats(s)).catch(() => {});
     // Load appointments

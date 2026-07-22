@@ -580,14 +580,76 @@ export async function getRadiologyCases(userId: string) {
   return data ?? [];
 }
 
-export async function getRadiologyQueue(_radiologistId: string) {
+/** Shape the radiology queue list + detail UI expects */
+export interface RadioCase {
+  id: string;
+  patient: string;
+  age: number;
+  scan: string;
+  urgency: string;
+  status: string;
+  submitted: string;
+  findings: string;
+  impression: string;
+  recommendations: string;
+  fileUrl?: string | null;
+}
+
+function parseNote(notes: string | null | undefined, key: string): string {
+  if (!notes) return "";
+  const match = notes.match(new RegExp(`${key}:\\s*([^|]+)`));
+  return match ? match[1].trim() : "";
+}
+
+function dbRowToRadioCase(row: Record<string, any>): RadioCase {
+  const notes: string = row.notes ?? "";
+  const summary: string = row.summary ?? "pending";
+  // Derive status from summary text
+  let status = "pending";
+  if (summary !== "pending" && summary.toLowerCase().includes("findings:")) status = "completed";
+  else if (summary !== "pending") status = "in_review";
+
+  // Parse urgency from notes e.g. "Urgency: emergency"
+  const urgency = parseNote(notes, "Urgency") || "routine";
+  const age = parseInt(parseNote(notes, "Age")) || 0;
+
+  // Parse report fields if completed
+  const findings = summary.match(/Findings:\s*(.*?)(?:\n|$)/)?.[1] ?? "";
+  const impression = summary.match(/Impression:\s*(.*?)(?:\n|$)/)?.[1] ?? "";
+  const recommendations = summary.match(/Recommendations:\s*(.*?)(?:\n|$)/)?.[1] ?? "";
+
+  // Human-readable submitted time
+  const created = row.createdAt ? new Date(row.createdAt) : null;
+  const diffMs = created ? Date.now() - created.getTime() : 0;
+  const diffMin = Math.floor(diffMs / 60000);
+  const submitted =
+    diffMin < 60 ? `${diffMin} min ago`
+    : diffMin < 1440 ? `${Math.floor(diffMin / 60)} hours ago`
+    : "Yesterday";
+
+  return {
+    id: row.id ?? "",
+    patient: row.patientName ?? "Unknown",
+    age,
+    scan: row.consultationType ?? row.title ?? "Scan",
+    urgency,
+    status,
+    submitted,
+    findings,
+    impression,
+    recommendations,
+    fileUrl: row.fileUrl ?? null,
+  };
+}
+
+export async function getRadiologyQueue(_radiologistId: string): Promise<RadioCase[]> {
   const { data, error } = await supabase
     .from("medicalRecords")
     .select("*")
     .eq("type", "image")
-    .order("createdAt", { ascending: true });
+    .order("createdAt", { ascending: false });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map(dbRowToRadioCase);
 }
 
 export async function submitRadiologyReport(report: {
