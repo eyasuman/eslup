@@ -901,6 +901,31 @@ export async function getInstitutionByUserId(userId: string): Promise<Institutio
   return data ?? null;
 }
 
+export async function getInstitutionById(id: string): Promise<Institution | null> {
+  const { data, error } = await supabase
+    .from("institute_pulse")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return null;
+  return data ?? null;
+}
+
+export async function getInstitutionTypes(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("institute_pulse")
+    .select("type")
+    .eq("status", "Active")
+    .not("type", "is", null);
+  if (error) return [];
+  const set = new Set<string>();
+  (data ?? []).forEach((row: any) => {
+    const t = (row.type ?? "").toString().trim();
+    if (t) set.add(t);
+  });
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
 export async function upsertInstitution(inst: Institution) {
   // Only send columns that actually exist in institute_pulse. Unknown columns
   // cause a Supabase schema-cache error on upsert.

@@ -26,7 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AmbulanceButton } from "@/components/AmbulanceButton";
 import { useApp } from "@/context/AppContext";
 import { ADDIS_HOSPITALS, Hospital } from "@/data/ethiopianHospitals";
-import { getInstitutions, institutionToHospital, Institution } from "@/lib/supabase";
+import { getInstitutionTypes, getInstitutions, institutionToHospital } from "@/lib/supabase";
 import { useColors } from "@/hooks/useColors";
 import { useTranslation } from "@/constants/translations";
 import { getActiveBanners } from "@/lib/supabase";
@@ -37,7 +37,7 @@ const PULSE_BANNER = require("../../assets/images/pulse-hd-banner.png");
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BANNER_WIDTH = SCREEN_WIDTH - 32; // 16px margin each side
 
-type Category = "all" | "hospitals" | "clinics";
+type Category = string;
 
 type BannerItem = {
   id: string;
@@ -99,6 +99,7 @@ export default function ExploreScreen() {
   const [category, setCategory]       = useState<Category>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [hospitals, setHospitals]     = useState<Hospital[]>(ADDIS_HOSPITALS);
+  const [categories, setCategories]   = useState<string[]>([]);
   const topPad    = Platform.OS === "web" ? 0 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
@@ -116,11 +117,8 @@ export default function ExploreScreen() {
     { id: "health_institutions",  iconName: "activity" as const, label: t("health_institutions"),  desc: t("clinics_facilities"),   color: "#DC2626" },
   ];
 
-  const CATEGORY_LABELS: Record<Category, string> = {
-    all:       t("all"),
-    hospitals: t("hospitals"),
-    clinics:   t("clinics"),
-  };
+  const categoryLabel = (cat: string) =>
+    cat === "all" ? t("all") : cat.charAt(0).toUpperCase() + cat.slice(1);
 
   // ── Auto-advance timer ──────────────────────────────────────────────────────
   const startTimer = useCallback(() => {
@@ -139,12 +137,25 @@ export default function ExploreScreen() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [bannerVisible, startTimer]);
 
-  // ── Load hospitals from Supabase (falls back to local data) ────────────────
+  // ── Load hospitals and dynamic categories from Supabase (falls back to local data) ──
   useEffect(() => {
     let active = true;
-    getInstitutions()
-      .then((data) => { if (active && data.length > 0) setHospitals(data.map(institutionToHospital)); })
-      .catch(() => { /* keep ADDIS_HOSPITALS fallback */ });
+    (async () => {
+      try {
+        const [institutions, types] = await Promise.all([getInstitutions(), getInstitutionTypes()]);
+        if (!active) return;
+        const mapped = institutions.map(institutionToHospital);
+        if (mapped.length > 0) setHospitals(mapped);
+        // Combine remote types with the fallback hospital types so the filter always shows something useful
+        const localTypes = Array.from(new Set(ADDIS_HOSPITALS.map((h) => h.type))).sort();
+        const merged = Array.from(new Set([...types, ...localTypes])).sort((a, b) => a.localeCompare(b));
+        setCategories(merged);
+      } catch {
+        // keep ADDIS_HOSPITALS fallback and derive categories from local data
+        const localTypes = Array.from(new Set(ADDIS_HOSPITALS.map((h) => h.type))).sort();
+        setCategories(localTypes);
+      }
+    })();
     return () => { active = false; };
   }, []);
 
@@ -196,8 +207,12 @@ export default function ExploreScreen() {
   const { useMemo } = React;
   const filteredHospitals = useMemo(() => {
     let list = hospitals;
-    if (category === "hospitals") list = list.filter((h) => h.categories.includes("hospital"));
-    if (category === "clinics")   list = list.filter((h) => h.categories.includes("clinic"));
+    if (category !== "all") {
+      const catLower = category.toLowerCase();
+      list = list.filter((h) =>
+        h.type.toLowerCase() === catLower || h.categories.some((c) => c.toLowerCase() === catLower)
+      );
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(
@@ -387,7 +402,7 @@ export default function ExploreScreen() {
             </View>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 10 }}>
-            {(["all", "hospitals", "clinics"] as Category[]).map((cat) => {
+            {["all", ...categories].map((cat) => {
               const active = category === cat;
               return (
                 <Pressable
@@ -395,7 +410,7 @@ export default function ExploreScreen() {
                   onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setCategory(cat); }}
                   style={[styles.filterChip, { backgroundColor: active ? "#315d93" : (isDark ? "rgba(255,255,255,0.08)" : "#EEF3FA"), borderColor: active ? "#315d93" : borderCol }]}
                 >
-                  <Text style={[styles.filterChipText, { color: active ? "#fff" : textMuted }]}>{CATEGORY_LABELS[cat]}</Text>
+                  <Text style={[styles.filterChipText, { color: active ? "#fff" : textMuted }]}>{categoryLabel(cat)}</Text>
                 </Pressable>
               );
             })}

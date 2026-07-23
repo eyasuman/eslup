@@ -13,8 +13,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ADDIS_HOSPITALS } from "@/data/ethiopianHospitals";
-import { getApprovedDoctors, type SupabaseDoctor } from "@/lib/supabase";
+import { ADDIS_HOSPITALS, Hospital } from "@/data/ethiopianHospitals";
+import { getApprovedDoctors, getInstitutionById, institutionToHospital, type SupabaseDoctor } from "@/lib/supabase";
 import { useColors } from "@/hooks/useColors";
 
 export default function InstituteDetailScreen() {
@@ -32,15 +32,32 @@ export default function InstituteDetailScreen() {
   const cardBg      = isDark ? "rgba(255,255,255,0.06)" : "#F4F7FB";
   const borderCol   = isDark ? "rgba(255,255,255,0.10)" : "#E2E8F0";
 
-  // Resolve hospital from local data (institutions table not yet created)
-  const hospital = ADDIS_HOSPITALS.find((h) => h.id === id) ?? null;
-
+  const [hospital, setHospital] = useState<Hospital | null>(null);
+  const [hospitalLoading, setHospitalLoading] = useState(true);
   const [doctors, setDoctors] = useState<SupabaseDoctor[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [doctorsLoading, setDoctorsLoading] = useState(true);
 
   useEffect(() => {
-    if (!hospital) { setLoading(false); return; }
-    setLoading(true);
+    let active = true;
+    setHospitalLoading(true);
+    (async () => {
+      if (!id) return;
+      // Try Supabase first, then fall back to the local static list
+      const remote = await getInstitutionById(id);
+      if (!active) return;
+      if (remote) {
+        setHospital(institutionToHospital(remote));
+      } else {
+        const local = ADDIS_HOSPITALS.find((h) => h.id === id) ?? null;
+        setHospital(local);
+      }
+    })().finally(() => setHospitalLoading(false));
+    return () => { active = false; };
+  }, [id]);
+
+  useEffect(() => {
+    if (!hospital) { setDoctorsLoading(false); return; }
+    setDoctorsLoading(true);
     getApprovedDoctors()
       .then((all) => {
         // Bio is stored as "HospitalName · languages" at registration time.
@@ -53,8 +70,16 @@ export default function InstituteDetailScreen() {
         setDoctors(matched);
       })
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => setDoctorsLoading(false));
   }, [hospital?.id]);
+
+  if (hospitalLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: bg, alignItems: "center", justifyContent: "center" }]}>
+        <ActivityIndicator size="large" color="#315d93" />
+      </View>
+    );
+  }
 
   if (!hospital) {
     return (
@@ -166,13 +191,13 @@ export default function InstituteDetailScreen() {
         <View style={styles.sectionLabelRow}>
           <Feather name="users" size={14} color="rgba(255,255,255,0.85)" />
           <Text style={styles.sectionLabel}>
-            {loading ? "Loading doctors…" : `${doctors.length} Doctor${doctors.length !== 1 ? "s" : ""} at this facility`}
+            {doctorsLoading ? "Loading doctors…" : `${doctors.length} Doctor${doctors.length !== 1 ? "s" : ""} at this facility`}
           </Text>
         </View>
       </View>
 
       {/* ── Doctor List ── */}
-      {loading ? (
+      {doctorsLoading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color="#315d93" />
         </View>
