@@ -819,11 +819,17 @@ export async function getActiveBanners(): Promise<
 
 // ─── INSTITUTIONS (Hospitals) ─────────────────────────────────────────────────
 
+/** Real columns in the Supabase `institute_pulse` table:
+ *  id, name, type, status, city, address, phone, email, licenseNo,
+ *  totalDoctors, totalBeds, services, accreditations, createdAt, userId, updatedAt
+ *  Extra fields below are kept for UI convenience but are stripped before upsert.
+ */
 export interface Institution {
   id?: string;
   userId?: string;
   name: string;
   type: "Government" | "Private" | "Mission" | string;
+  /** UI-only alias; mapped to `type` on upsert. */
   category?: string;
   email?: string;
   address?: string;
@@ -835,19 +841,26 @@ export interface Institution {
   phone?: string;
   lat?: number;
   lng?: number;
+  /** UI-only alias; mapped from `type` for the hospital list. */
   categories?: string[];
   services?: string[];
   color?: string;
   status?: "Pending" | "Active" | "Declined" | string;
+  /** Uploaded license file URL. Saved to `licenseNo` if a dedicated `licenseUrl` column does not exist yet. */
   licenseUrl?: string;
+  licenseNo?: string;
+  totalDoctors?: number;
+  totalBeds?: number;
+  accreditations?: any;
 }
 
 export function institutionToHospital(inst: Institution): Hospital {
   const type: Hospital["type"] = inst.type === "Government" || inst.type === "Private" || inst.type === "Mission" ? inst.type : "Private";
-  const categories: Hospital["categories"] = inst.category
-    ? inst.category.toLowerCase() === "hospital" ? ["hospital", "emergency"]
-    : inst.category.toLowerCase() === "clinic" ? ["clinic"]
-    : ["hospital"]
+  const categoryLabel = (inst.category ?? inst.type ?? "").toLowerCase();
+  const categories: Hospital["categories"] =
+    categoryLabel.includes("hospital") ? ["hospital", "emergency"]
+    : categoryLabel.includes("clinic") || categoryLabel.includes("health") ? ["clinic"]
+    : categoryLabel.includes("pharmacy") ? ["pharmacy"]
     : (inst.categories as any) ?? ["hospital"];
   return {
     id: inst.id ?? inst.userId ?? inst.name,
@@ -889,10 +902,33 @@ export async function getInstitutionByUserId(userId: string): Promise<Institutio
 }
 
 export async function upsertInstitution(inst: Institution) {
-  // Use userId as the conflict key so re-registrations update the existing row
+  // Only send columns that actually exist in institute_pulse. Unknown columns
+  // cause a Supabase schema-cache error on upsert.
+  const payload: Record<string, any> = {
+    userId: inst.userId,
+    name: inst.name,
+    type: inst.category ?? inst.type ?? "Other",
+    status: inst.status ?? "Pending",
+    city: inst.city ?? null,
+    address: inst.address ?? null,
+    phone: inst.phone ?? null,
+    email: inst.email ?? null,
+    services: inst.services ?? [],
+    totalDoctors: inst.totalDoctors ?? 0,
+    totalBeds: inst.totalBeds ?? null,
+  };
+  if (inst.id) payload.id = inst.id;
+  // Store the uploaded license URL. The real table currently has `licenseNo`
+  // (text) as the only license-related column. Save the URL there until a
+  // dedicated `licenseUrl` column is added via Supabase → SQL Editor:
+  //   ALTER TABLE public.institute_pulse ADD COLUMN "licenseUrl" TEXT;
+  const licenseUrl = inst.licenseUrl ?? inst.licenseNo;
+  if (licenseUrl) {
+    payload.licenseNo = licenseUrl;
+  }
   const { error } = await supabase
     .from("institute_pulse")
-    .upsert(inst, { onConflict: "userId" });
+    .upsert(payload, { onConflict: "userId" });
   if (error) throw error;
 }
 

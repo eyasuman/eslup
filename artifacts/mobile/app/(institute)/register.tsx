@@ -93,10 +93,6 @@ export default function InstituteRegisterScreen() {
 
   const pickDocument = async () => {
     try {
-      if (Platform.OS === "web") {
-        setLicenseFile({ name: "institute_license.pdf", uri: "mock://license", type: "application/pdf" });
-        return;
-      }
       const result = await DocumentPicker.getDocumentAsync({
         type: ["application/pdf", "image/jpeg", "image/png", "image/jpg"],
         copyToCacheDirectory: true,
@@ -167,18 +163,21 @@ export default function InstituteRegisterScreen() {
         return;
       }
 
-      // 2. Upload licence file
+      // 2. Upload licence file (real file, not mock)
       let licenseUrl = "";
-      if (licenseFile && licenseFile.uri !== "mock://license") {
-        try { licenseUrl = await uploadInstituteLicense(userId, licenseFile); } catch {}
+      if (licenseFile) {
+        try { licenseUrl = await uploadInstituteLicense(userId, licenseFile); } catch (err: any) {
+          Alert.alert("License upload failed", err?.message ?? "Could not upload the licence file. Please try again.");
+          setLoading(false);
+          return;
+        }
       }
 
-      // 3. Save institute record to Supabase
+      // 3. Save institute record to Supabase (only real institute_pulse columns)
       await upsertInstitution({
         userId,
         name: form.name,
-        type: "Private",
-        category: category ?? "Other",
+        type: category ?? "Other",
         email: form.email,
         phone: form.phone,
         address: form.address || undefined,
@@ -186,7 +185,6 @@ export default function InstituteRegisterScreen() {
         status: "Pending",
         licenseUrl: licenseUrl || undefined,
         services: [],
-        categories: [category ?? "Other"],
       });
 
       // 4. Welcome notification
