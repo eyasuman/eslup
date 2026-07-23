@@ -57,6 +57,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",
+    "expo-av": "^16.0.8",
     "expo-camera": "^17.0.10",
     "expo-document-picker": "^14.0.8",
     "react-native-maps": "1.18.0",

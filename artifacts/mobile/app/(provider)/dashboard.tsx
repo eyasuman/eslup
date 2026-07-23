@@ -8,6 +8,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -17,6 +18,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Video, ResizeMode } from "expo-av";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
@@ -122,6 +124,7 @@ export default function ProviderDashboard() {
   });
 
   const [selectedCase, setSelectedCase] = useState<RadioCase | null>(null);
+  const [fullScreenMedia, setFullScreenMedia] = useState<{ uri: string | null; type: "image" | "video" | "pdf" | "unknown" } | null>(null);
   const [radioFindings, setRadioFindings] = useState("");
   const [radioImpression, setRadioImpression] = useState("");
   const [radioRecommendations, setRadioRecommendations] = useState("");
@@ -1131,30 +1134,55 @@ export default function ProviderDashboard() {
                   </View>
                 </View>
 
-                {/* Scan viewer placeholder */}
-                <View style={[styles.scanViewer, { backgroundColor: "#050D18" }]}>
-                  <View style={styles.scanPlaceholder}>
-                    <Feather name="image" size={48} color="rgba(127,168,216,0.3)" />
-                    <Text style={styles.scanPlaceholderText}>{selectedCase.scan}</Text>
-                    <Text style={{ color: "rgba(255,255,255,0.3)", fontSize: 11, fontFamily: "Inter_400Regular" }}>
-                      DICOM viewer — full version required
-                    </Text>
-                  </View>
+                {/* Scan viewer — images, video, or PDF */}
+                <Pressable
+                  onPress={() => {
+                    const url = selectedCase.fileUrl;
+                    if (!url) return;
+                    if (url.toLowerCase().endsWith(".mp4") || url.toLowerCase().startsWith("video")) {
+                      setFullScreenMedia({ uri: url, type: "video" });
+                    } else if (url.toLowerCase().endsWith(".pdf")) {
+                      setFullScreenMedia({ uri: url, type: "pdf" });
+                    } else {
+                      setFullScreenMedia({ uri: url, type: "image" });
+                    }
+                  }}
+                  style={[styles.scanViewer, { backgroundColor: "#050D18" }]}
+                >
+                  {selectedCase.fileUrl ? (
+                    selectedCase.fileUrl.toLowerCase().endsWith(".mp4") ? (
+                      <Video
+                        source={{ uri: selectedCase.fileUrl }}
+                        style={{ width: "100%", height: "100%" }}
+                        useNativeControls
+                        resizeMode={ResizeMode.CONTAIN}
+                        isLooping
+                      />
+                    ) : (
+                      <Image
+                        source={{ uri: selectedCase.fileUrl }}
+                        style={{ width: "100%", height: "100%" }}
+                        resizeMode="contain"
+                      />
+                    )
+                  ) : (
+                    <View style={styles.scanPlaceholder}>
+                      <Feather name="image" size={48} color="rgba(127,168,216,0.3)" />
+                      <Text style={styles.scanPlaceholderText}>{selectedCase.scan}</Text>
+                      <Text style={{ color: "rgba(255,255,255,0.3)", fontSize: 11, fontFamily: "Inter_400Regular" }}>
+                        No scan file attached
+                      </Text>
+                    </View>
+                  )}
 
-                  {/* Viewer controls */}
-                  <View style={styles.viewerControls}>
-                    {[
-                      { icon: "zoom-in" as const, onPress: () => Alert.alert("Zoom In", "Zooming into scan image.") },
-                      { icon: "zoom-out" as const, onPress: () => Alert.alert("Zoom Out", "Zooming out.") },
-                      { icon: "rotate-cw" as const, onPress: () => Alert.alert("Rotate", "Rotating scan 90°.") },
-                      { icon: "maximize-2" as const, onPress: () => Alert.alert("Full Screen", "Full screen mode.") },
-                    ].map((ctrl) => (
-                      <Pressable key={ctrl.icon} onPress={ctrl.onPress} style={styles.viewerBtn}>
-                        <Feather name={ctrl.icon} size={18} color="#7FA8D8" />
+                  {selectedCase.fileUrl && (
+                    <View style={styles.viewerControls}>
+                      <Pressable style={styles.viewerBtn}>
+                        <Feather name="maximize-2" size={18} color="#7FA8D8" />
                       </Pressable>
-                    ))}
-                  </View>
-                </View>
+                    </View>
+                  )}
+                </Pressable>
 
                 {/* Brightness & Contrast sliders */}
                 <View style={[styles.slidersCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
@@ -1441,6 +1469,43 @@ export default function ProviderDashboard() {
           </View>
         )}
       </ScrollView>
+
+      {/* Full-screen media viewer (image / video / PDF) */}
+      <Modal
+        visible={!!fullScreenMedia?.uri}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFullScreenMedia(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center" }}>
+          <Pressable
+            onPress={() => setFullScreenMedia(null)}
+            style={{ position: "absolute", top: 40, right: 16, zIndex: 10, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, padding: 8 }}
+          >
+            <Feather name="x" size={24} color="#fff" />
+          </Pressable>
+          {fullScreenMedia?.uri && fullScreenMedia.type === "image" && (
+            <Image source={{ uri: fullScreenMedia.uri }} style={{ width: "100%", height: "80%" }} resizeMode="contain" />
+          )}
+          {fullScreenMedia?.uri && fullScreenMedia.type === "video" && (
+            <Video
+              source={{ uri: fullScreenMedia.uri }}
+              style={{ width: "100%", height: "80%" }}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              isLooping
+              shouldPlay
+            />
+          )}
+          {fullScreenMedia?.uri && fullScreenMedia.type === "pdf" && (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+              <Feather name="file-text" size={48} color="#fff" />
+              <Text style={{ color: "#fff", fontSize: 16, marginTop: 16, fontFamily: "Inter_600SemiBold" }}>PDF Document</Text>
+              <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, marginTop: 8, fontFamily: "Inter_400Regular" }}>Preview opens in external viewer</Text>
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }

@@ -11,6 +11,7 @@ import {
   FlatList,
   Image,
   Linking,
+  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -25,7 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AmbulanceButton } from "@/components/AmbulanceButton";
 import { useApp } from "@/context/AppContext";
 import { ADDIS_HOSPITALS, Hospital } from "@/data/ethiopianHospitals";
-import { getInstitutions, Institution } from "@/lib/supabase";
+import { getInstitutions, institutionToHospital, Institution } from "@/lib/supabase";
 import { useColors } from "@/hooks/useColors";
 import { useTranslation } from "@/constants/translations";
 import { getActiveBanners } from "@/lib/supabase";
@@ -90,6 +91,7 @@ export default function ExploreScreen() {
   const [bannerVisible, setBannerVisible] = useState(true);
   const [banners, setBanners]             = useState<BannerItem[]>(FALLBACK_BANNERS);
   const [currentIndex, setCurrentIndex]   = useState(0);
+  const [fullBannerImage, setFullBannerImage] = useState<string | null>(null);
   const bannerAnim  = useRef(new Animated.Value(1)).current;
   const flatListRef = useRef<FlatList<BannerItem>>(null);
   const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -141,7 +143,7 @@ export default function ExploreScreen() {
   useEffect(() => {
     let active = true;
     getInstitutions()
-      .then((data) => { if (active && data.length > 0) setHospitals(data as unknown as Hospital[]); })
+      .then((data) => { if (active && data.length > 0) setHospitals(data.map(institutionToHospital)); })
       .catch(() => { /* keep ADDIS_HOSPITALS fallback */ });
     return () => { active = false; };
   }, []);
@@ -222,13 +224,16 @@ export default function ExploreScreen() {
     const hasText = !!(item.title || item.message || item.promoCode);
     return (
       <Pressable
-        onPress={() => openPromoLink(item)}
+        onPress={() => {
+          if (item.imageUrl) setFullBannerImage(item.imageUrl);
+          else openPromoLink(item);
+        }}
         style={{ width: BANNER_WIDTH }}
       >
         <Image
           source={item.imageUrl ? { uri: item.imageUrl } : PULSE_BANNER}
           style={styles.bannerImage}
-          resizeMode="cover"
+          resizeMode="contain"
         />
         {hasText && (
           <View style={styles.bannerOverlay}>
@@ -425,6 +430,30 @@ export default function ExploreScreen() {
       </ScrollView>
 
       <AmbulanceButton visible={true} />
+
+      {/* Full banner image viewer (no cropping) */}
+      <Modal
+        visible={!!fullBannerImage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFullBannerImage(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.92)", justifyContent: "center" }}>
+          <Pressable
+            onPress={() => setFullBannerImage(null)}
+            style={{ position: "absolute", top: 40, right: 16, zIndex: 10, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, padding: 8 }}
+          >
+            <Feather name="x" size={24} color="#fff" />
+          </Pressable>
+          {fullBannerImage && (
+            <Image
+              source={{ uri: fullBannerImage }}
+              style={{ width: "100%", height: "80%" }}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
     </Container>
   );
 }

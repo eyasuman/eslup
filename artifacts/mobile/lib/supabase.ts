@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import { Hospital } from "@/data/ethiopianHospitals";
 
 const SUPABASE_URL =
   process.env.EXPO_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
@@ -841,9 +842,35 @@ export interface Institution {
   licenseUrl?: string;
 }
 
+export function institutionToHospital(inst: Institution): Hospital {
+  const type: Hospital["type"] = inst.type === "Government" || inst.type === "Private" || inst.type === "Mission" ? inst.type : "Private";
+  const categories: Hospital["categories"] = inst.category
+    ? inst.category.toLowerCase() === "hospital" ? ["hospital", "emergency"]
+    : inst.category.toLowerCase() === "clinic" ? ["clinic"]
+    : ["hospital"]
+    : (inst.categories as any) ?? ["hospital"];
+  return {
+    id: inst.id ?? inst.userId ?? inst.name,
+    name: inst.name,
+    type,
+    address: inst.address ?? "",
+    district: inst.district ?? inst.city ?? "",
+    city: inst.city ?? "",
+    rating: inst.rating ?? 0,
+    distanceKm: inst.distanceKm ?? 0,
+    open24h: inst.open24h ?? false,
+    phone: inst.phone ?? "",
+    lat: inst.lat ?? 0,
+    lng: inst.lng ?? 0,
+    categories,
+    services: inst.services ?? [],
+    color: inst.color ?? "#315d93",
+  };
+}
+
 export async function getInstitutions(): Promise<Institution[]> {
   const { data, error } = await supabase
-    .from("institutions")
+    .from("institute_pulse")
     .select("*")
     .eq("status", "Active")
     .order("name", { ascending: true });
@@ -853,7 +880,7 @@ export async function getInstitutions(): Promise<Institution[]> {
 
 export async function getInstitutionByUserId(userId: string): Promise<Institution | null> {
   const { data, error } = await supabase
-    .from("institutions")
+    .from("institute_pulse")
     .select("*")
     .eq("userId", userId)
     .maybeSingle();
@@ -864,7 +891,7 @@ export async function getInstitutionByUserId(userId: string): Promise<Institutio
 export async function upsertInstitution(inst: Institution) {
   // Use userId as the conflict key so re-registrations update the existing row
   const { error } = await supabase
-    .from("institutions")
+    .from("institute_pulse")
     .upsert(inst, { onConflict: "userId" });
   if (error) throw error;
 }
