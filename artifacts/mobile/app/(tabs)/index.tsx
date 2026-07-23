@@ -599,7 +599,7 @@ const styles = StyleSheet.create({
   serviceCardDesc:  { color: "rgba(255,255,255,0.6)", fontSize: 10, fontFamily: "Inter_400Regular" },
 
   // ── Filters ──
-  filterSection:    { paddingHorizontal: 16, marginTop: 20 },
+  filterSection:    { paddingHorizontal: 16, marginTop: 20, marginBottom: 14 },
   resultsHeaderRow: { alignItems: "flex-end", justifyContent: "space-between" },
   resultsSub:       { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   filterChip:       { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20, borderWidth: 1 },
