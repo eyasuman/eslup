@@ -806,12 +806,31 @@ export async function getActiveBanners(): Promise<
   { id: string; title: string; message: string; promoCode: string; imageUrl?: string; linkUrl?: string }[]
 > {
   try {
+    // Try the Supabase `banners` table directly (anon key, no API server needed)
+    const { data, error } = await supabase
+      .from("banners")
+      .select("*")
+      .eq("active", true)
+      .order("order", { ascending: true });
+
+    if (!error && data && data.length > 0) {
+      return data.map((b: any, i: number) => ({
+        id: String(b.id ?? b.order ?? i),
+        title: b.title ?? "",
+        message: b.message ?? b.subtitle ?? "",
+        promoCode: b.promoCode ?? b.promo_code ?? "",
+        imageUrl: b.imageUrl ?? b.image_url ?? undefined,
+        linkUrl: b.linkUrl ?? b.link_url ?? undefined,
+      }));
+    }
+
+    // Fallback: try the API server (requires SUPABASE_SERVICE_ROLE_KEY)
     const domain = process.env.EXPO_PUBLIC_DOMAIN;
     if (!domain) return [];
     const res = await fetch(`https://${domain}/api/banners`);
     if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    const json = await res.json();
+    return Array.isArray(json) ? json : [];
   } catch {
     return [];
   }

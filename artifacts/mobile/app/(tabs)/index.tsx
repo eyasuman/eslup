@@ -6,7 +6,6 @@ import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
-  Animated,
   Dimensions,
   FlatList,
   Image,
@@ -88,11 +87,9 @@ export default function ExploreScreen() {
   const t       = useTranslation(language);
   const isRTL   = language === "ar";
 
-  const [bannerVisible, setBannerVisible] = useState(true);
   const [banners, setBanners]             = useState<BannerItem[]>(FALLBACK_BANNERS);
   const [currentIndex, setCurrentIndex]   = useState(0);
   const [fullBannerImage, setFullBannerImage] = useState<string | null>(null);
-  const bannerAnim  = useRef(new Animated.Value(1)).current;
   const flatListRef = useRef<FlatList<BannerItem>>(null);
   const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -133,9 +130,9 @@ export default function ExploreScreen() {
   }, [banners.length]);
 
   useEffect(() => {
-    if (bannerVisible) startTimer();
+    startTimer();
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [bannerVisible, startTimer]);
+  }, [startTimer]);
 
   // ── Load hospitals and dynamic categories from Supabase (falls back to local data) ──
   useEffect(() => {
@@ -178,14 +175,6 @@ export default function ExploreScreen() {
     })();
     return () => { active = false; };
   }, []);
-
-  const dismissBanner = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (timerRef.current) clearInterval(timerRef.current);
-    Animated.timing(bannerAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start(
-      () => setBannerVisible(false)
-    );
-  };
 
   const openPromoLink = async (banner: BannerItem) => {
     if (!banner.linkUrl) return;
@@ -295,13 +284,7 @@ export default function ExploreScreen() {
       <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: bottomPad + 110 }}>
 
         {/* ── Promo Carousel ── */}
-        {bannerVisible && (
-          <Animated.View style={[styles.carouselWrapper, { opacity: bannerAnim }]}>
-            {/* X dismiss button */}
-            <Pressable onPress={dismissBanner} style={styles.dismissBtn} hitSlop={10}>
-              <Feather name="x" size={13} color="#fff" />
-            </Pressable>
-
+        <View style={styles.carouselWrapper}>
             <FlatList
               ref={flatListRef}
               data={banners}
@@ -339,8 +322,7 @@ export default function ExploreScreen() {
                 ))}
               </View>
             )}
-          </Animated.View>
-        )}
+        </View>
 
         {/* ── Search ── */}
         <View style={[styles.searchSection, { flexDirection: isRTL ? "row-reverse" : "row" }]}>
@@ -568,7 +550,6 @@ const styles = StyleSheet.create({
 
   // ── Carousel ──
   carouselWrapper: { marginHorizontal: 16, marginTop: 14 },
-  dismissBtn:      { position: "absolute", top: 8, right: 8, zIndex: 10, backgroundColor: "rgba(0,0,0,0.45)", borderRadius: 14, width: 26, height: 26, alignItems: "center", justifyContent: "center" },
   bannerImage:     { width: BANNER_WIDTH, height: 165 },
   bannerOverlay:   { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(32,41,55,0.50)", justifyContent: "flex-end", padding: 16 },
   bannerContent:   { gap: 6 },

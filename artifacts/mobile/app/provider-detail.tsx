@@ -54,8 +54,8 @@ export default function ProviderDetailScreen() {
 
   const bg = colors.isDark ? colors.background : "#FFFFFF";
   const textPrimary = colors.isDark ? "#FFFFFF" : "#202937";
-  const textMuted = colors.isDark ? "#94A3B8" : "#64748B";
-  const cardBg = colors.isDark ? "rgba(255,255,255,0.06)" : "#F4F7FB";
+  const textMuted = colors.isDark ? "#B8C5D6" : "#64748B";
+  const cardBg = colors.isDark ? "rgba(255,255,255,0.10)" : "#F4F7FB";
   const borderCol = colors.isDark ? "rgba(255,255,255,0.1)" : "#E2E8F0";
 
   const hasVideo = doctor?.serviceModes?.video === true;
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   liveTagText: { color: "#fff", fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
   statusCircle: { width: 12, height: 12, borderRadius: 6 },
   bottomBar: { flexDirection: "row", gap: 10, paddingHorizontal: 20, paddingTop: 14, borderTopWidth: 0.5 },
-  bookBtn: { flex: 1, backgroundColor: "#202937", borderRadius: 14, padding: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  bookBtn: { flex: 1, backgroundColor: "#315d93", borderRadius: 14, padding: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   bookBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
   videoBtn: { flex: 1, backgroundColor: "transparent", borderRadius: 14, padding: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1.5 },
   videoBtnText: { color: "#315d93", fontSize: 14, fontFamily: "Inter_700Bold" },
