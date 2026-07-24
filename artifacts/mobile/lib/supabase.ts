@@ -810,7 +810,7 @@ export async function getActiveBanners(): Promise<
     const { data, error } = await supabase
       .from("banners")
       .select("*")
-      .eq("active", true)
+      .eq("isActive", true)
       .order("order", { ascending: true });
 
     if (!error && data && data.length > 0) {
