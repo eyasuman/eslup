@@ -1353,8 +1353,8 @@ function SupabaseDoctorCard({
         </View>
         <View style={styles.docTags}>
           {serviceTagLabels.slice(0, 3).map((t) => (
-            <View key={t} style={[styles.tag, { backgroundColor: "#315d93" + "12" }]}>
-              <Text style={[styles.tagText, { color: "#315d93" }]}>{t}</Text>
+            <View key={t} style={[styles.tag, { backgroundColor: isDark ? "rgba(49, 93, 147, 0.45)" : "#315d93" + "12" }]}>
+              <Text style={[styles.tagText, { color: isDark ? "#8FBCFF" : "#315d93" }]}>{t}</Text>
             </View>
           ))}
         </View>

@@ -284,9 +284,9 @@ export default function SpecialistListScreen() {
                 {consultationTags.length > 0 && (
                   <View style={styles.tags}>
                     {consultationTags.map((ct) => (
-                      <View key={ct.id} style={[styles.tag, { backgroundColor: "#315d93" + "12", borderColor: "#315d93" + "25" }]}>
-                        <Feather name={ct.icon} size={10} color="#315d93" />
-                        <Text style={[styles.tagText, { color: "#315d93" }]}>{ct.id}</Text>
+                      <View key={ct.id} style={[styles.tag, { backgroundColor: colors.isDark ? "rgba(49, 93, 147, 0.45)" : "#315d93" + "12", borderColor: colors.isDark ? "rgba(49, 93, 147, 0.55)" : "#315d93" + "25" }]}>
+                        <Feather name={ct.icon} size={10} color={colors.isDark ? "#8FBCFF" : "#315d93"} />
+                        <Text style={[styles.tagText, { color: colors.isDark ? "#8FBCFF" : "#315d93" }]}>{ct.id}</Text>
                       </View>
                     ))}
                   </View>
