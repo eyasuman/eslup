@@ -1319,7 +1319,7 @@ function SupabaseDoctorCard({
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         router.push({
           pathname: "/provider-detail",
-          params: { doctorId: doc.userId, doctorName: doc.name },
+          params: { doctorId: doc.userId, doctorName: doc.name, initialTab: "location" },
         });
       }}
       style={({ pressed }) => [
@@ -1339,9 +1339,11 @@ function SupabaseDoctorCard({
         <Feather name="user" size={26} color="#315d93" />
         {isOnline && <View style={styles.onlineDot} />}
       </View>
-      <View style={{ flex: 1, gap: 3 }}>
-        <Text style={[styles.docName, { color: textPrimary }]}>{doc.name}</Text>
-        <Text style={[styles.docSpec, { color: "#315d93" }]}>
+      <View style={{ flex: 1, gap: 4, justifyContent: "space-between" }}>
+        <Text style={[styles.docName, { color: textPrimary }]} numberOfLines={1} ellipsizeMode="tail">
+          {doc.name}
+        </Text>
+        <Text style={[styles.docSpec, { color: "#315d93" }]} numberOfLines={1} ellipsizeMode="tail">
           {doc.specialty ?? doc.providerType ?? "Healthcare Provider"}
         </Text>
         <View style={styles.docMetaRow}>
@@ -1359,7 +1361,7 @@ function SupabaseDoctorCard({
           ))}
         </View>
       </View>
-      <View style={{ alignItems: "flex-end", gap: 5 }}>
+      <View style={{ alignItems: "flex-end", justifyContent: "space-between", minWidth: 72, gap: 8 }}>
         {doc.consultationFee != null && (
           <Text style={[styles.docPrice, { color: "#059669" }]}>
             ETB {Number(doc.consultationFee).toLocaleString()}
@@ -1453,23 +1455,23 @@ const styles = StyleSheet.create({
     borderRadius: 10, borderWidth: 1, alignItems: "flex-start",
   },
   secNoteText: { flex: 1, fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 17 },
-  docCard: { flexDirection: "row", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
-  docAvatarWrap: { width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center" },
+  docCard: { flexDirection: "row", gap: 14, padding: 16, borderRadius: 14, borderWidth: 1, minHeight: 112, alignItems: "flex-start" },
+  docAvatarWrap: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center" },
   onlineDot: {
     position: "absolute", bottom: 2, right: 2, width: 12, height: 12,
     borderRadius: 6, backgroundColor: "#059669", borderWidth: 2, borderColor: "#fff",
   },
-  docName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  docName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   docSpec: { fontSize: 12, fontFamily: "Inter_500Medium" },
   docMetaRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   docMetaText: { fontSize: 11, fontFamily: "Inter_400Regular", flex: 1 },
-  docTags: { flexDirection: "row", gap: 5, flexWrap: "wrap" },
-  tag: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 },
-  tagText: { fontSize: 9, fontFamily: "Inter_500Medium" },
+  docTags: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+  tag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  tagText: { fontSize: 10, fontFamily: "Inter_500Medium" },
   ratingRow: { flexDirection: "row", alignItems: "center", gap: 3 },
   ratingVal: { fontSize: 12, fontFamily: "Inter_700Bold" },
-  docPrice: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  availBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 5 },
+  docPrice: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  availBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   availText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
   modalOverlay: {
     position: "absolute", top: 0, left: 0, right: 0, bottom: 0,

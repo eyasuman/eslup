@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getDoctorByUserId } from "@/lib/supabase";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
+import NearbyMap from "@/components/NearbyMap";
 
 export default function ProviderDetailScreen() {
   const params = useLocalSearchParams<{
@@ -26,7 +27,10 @@ export default function ProviderDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useApp();
-  const [activeTab, setActiveTab] = useState<"about" | "services">("about");
+  const initialTab = (params.initialTab as "about" | "services" | "location") ?? "about";
+  const [activeTab, setActiveTab] = useState<"about" | "services" | "location">(
+    ["about", "services", "location"].includes(initialTab) ? initialTab : "about"
+  );
   const [doctor, setDoctor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -174,14 +178,14 @@ export default function ProviderDetailScreen() {
         </View>
 
         <View style={styles.profileTabs}>
-          {(["about", "services"] as const).map((tab) => (
+          {(["about", "services", "location"] as const).map((tab) => (
             <Pressable
               key={tab}
               onPress={() => setActiveTab(tab)}
               style={[styles.profileTab, activeTab === tab && styles.profileTabActive]}
             >
               <Text style={[styles.profileTabText, { color: activeTab === tab ? "#fff" : "rgba(255,255,255,0.5)" }]}>
-                {tab === "about" ? "About" : "Services"}
+                {tab === "about" ? "About" : tab === "services" ? "Services" : "Map"}
               </Text>
             </Pressable>
           ))}
@@ -332,6 +336,27 @@ export default function ProviderDetailScreen() {
               </View>
             </View>
           </>
+        )}
+
+        {activeTab === "location" && doctor && (
+          <View style={{ flex: 1, minHeight: 360, borderRadius: 14, overflow: "hidden" }}>
+            <NearbyMap
+              docs={[{
+                id: doctor.id,
+                userId: doctor.userId,
+                name: doctor.name ?? params.doctorName ?? "Provider",
+                specialty: doctor.specialty ?? doctor.providerType ?? "Healthcare Provider",
+                city: doctor.city ?? "Addis Ababa",
+                serviceModes: doctor.serviceModes,
+                availability: doctor.availability,
+              }]}
+              isDark={colors.isDark}
+              textPrimary={textPrimary}
+              textMuted={textMuted}
+              cardBg={cardBg}
+              cardBorder={borderCol}
+            />
+          </View>
         )}
       </ScrollView>
 

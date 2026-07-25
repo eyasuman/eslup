@@ -327,23 +327,45 @@ export async function updateProviderAvailability(
   return updateDoctorOnlineStatus(userId, available);
 }
 
+// ─── GENERIC SUPABASE STORAGE UPLOAD ────────────────────────────────────────────
+export type UploadableFile = { uri: string; name?: string; type?: string };
+
+export async function uploadFile(
+  bucket: string,
+  path: string,
+  file: UploadableFile,
+  contentType?: string
+): Promise<{ path: string; publicUrl: string }> {
+  if (file.uri.startsWith("mock://") || file.uri.startsWith("http")) {
+    throw new Error("Cannot upload a mock or remote URI directly.");
+  }
+  const response = await fetch(file.uri);
+  const blob = await response.blob();
+  const type = contentType ?? blob.type ?? file.type ?? "application/octet-stream";
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(path, blob, { contentType: type, upsert: true });
+  if (error) throw error;
+  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
+  return { path: data.path, publicUrl: urlData.publicUrl };
+}
+
 // ─── PROFILE IMAGE UPLOAD ──────────────────────────────────────────────────────
 
 export async function uploadProfileImage(userId: string, imageUri: string): Promise<string> {
   const ext = imageUri.split(".").pop()?.split("?")[0] ?? "jpg";
   const fileName = `${userId}/avatar_${Date.now()}.${ext}`;
-  const response = await fetch(imageUri);
-  const blob = await response.blob();
-  const { error } = await supabase.storage
-    .from("profile-images")
-    .upload(fileName, blob, { contentType: `image/${ext}`, upsert: true });
-  if (error) throw error;
-  const { data: urlData } = supabase.storage.from("profile-images").getPublicUrl(fileName);
+  const { publicUrl } = await uploadFile(
+    "profile-images",
+    fileName,
+    { uri: imageUri, type: `image/${ext}` },
+    `image/${ext}`
+  );
   await supabase
     .from("doctors")
     .update({ updatedAt: new Date().toISOString() })
     .eq("userId", userId);
-  return urlData.publicUrl;
+  return publicUrl;
 }
 
 // ─── PAYMENT PROOF UPLOAD ──────────────────────────────────────────────────────
@@ -351,17 +373,13 @@ export async function uploadProfileImage(userId: string, imageUri: string): Prom
 export async function uploadPaymentProof(userId: string, imageUri: string): Promise<string> {
   const ext = imageUri.split(".").pop()?.split("?")[0] ?? "jpg";
   const fileName = `payment_proofs/${userId}_${Date.now()}.${ext}`;
-  const response = await fetch(imageUri);
-  const blob = await response.blob();
-  
-  const { data, error } = await supabase.storage
-    .from("payment-proofs")
-    .upload(fileName, blob, { contentType: `image/${ext}`, upsert: true });
-    
-  if (error) throw error;
-  
-  const { data: urlData } = supabase.storage.from("payment-proofs").getPublicUrl(data.path);
-  return urlData.publicUrl;
+  const { publicUrl } = await uploadFile(
+    "payment-proofs",
+    fileName,
+    { uri: imageUri, type: `image/${ext}` },
+    `image/${ext}`
+  );
+  return publicUrl;
 }
 
 // ─── MEDICAL LICENSE UPLOAD ────────────────────────────────────────────────────
@@ -371,19 +389,26 @@ export async function uploadMedicalLicense(
   file: { name: string; type: string; uri: string }
 ): Promise<string> {
   const fileName = `${userId}/license_${Date.now()}_${file.name}`;
-  const blob = await fetch(file.uri).then((r) => r.blob());
-  const { data, error } = await supabase.storage
-    .from("medical-licenses")
-    .upload(fileName, blob, { contentType: file.type, upsert: true });
-  if (error) throw error;
+  const { path } = await uploadFile("medical-licenses", fileName, file, file.type);
   await supabase
     .from("doctors")
     .update({
-      licenseFile: { path: data.path, name: file.name, type: file.type },
+      licenseFile: { path, name: file.name, type: file.type },
       updatedAt: new Date().toISOString(),
     })
     .eq("userId", userId);
-  return data.path;
+  return path;
+}
+
+// ─── CERTIFICATE UPLOAD ───────────────────────────────────────────────────────
+
+export async function uploadCertificate(
+  userId: string,
+  file: { name: string; type: string; uri: string }
+): Promise<{ path: string; publicUrl: string }> {
+  const ext = file.name.split(".").pop() ?? "pdf";
+  const fileName = `${userId}/certificate_${Date.now()}.${ext}`;
+  return uploadFile("medical-licenses", `certificates/${fileName}`, file, file.type);
 }
 
 // ─── APPOINTMENTS ─────────────────────────────────────────────────────────────
@@ -520,11 +545,13 @@ export async function submitRadiologyCase(caseData: {
     try {
       const ext = caseData.scan_image_uri.split(".").pop()?.split("?")[0] ?? "jpg";
       const fileName = `${caseData.submitted_by}/${Date.now()}_scan.${ext}`;
-      const blob = await fetch(caseData.scan_image_uri).then((r) => r.blob());
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("radiology-scans")
-        .upload(fileName, blob, { contentType: `image/${ext}`, upsert: true });
-      if (!uploadError) fileUrl = uploadData.path;
+      const { path } = await uploadFile(
+        "radiology-scans",
+        fileName,
+        { uri: caseData.scan_image_uri, type: `image/${ext}` },
+        `image/${ext}`
+      );
+      fileUrl = path;
     } catch {}
   }
 
@@ -534,11 +561,13 @@ export async function submitRadiologyCase(caseData: {
       const ext = (caseData.scan_video_name ?? caseData.scan_video_uri).split(".").pop()?.split("?")[0] ?? "mp4";
       const contentType = ext === "mp4" ? "video/mp4" : `video/${ext}`;
       const fileName = `${caseData.submitted_by}/${Date.now()}_scan.${ext}`;
-      const blob = await fetch(caseData.scan_video_uri).then((r) => r.blob());
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("radiology-scans")
-        .upload(fileName, blob, { contentType, upsert: true });
-      if (!uploadError) fileUrl = uploadData.path;
+      const { path } = await uploadFile(
+        "radiology-scans",
+        fileName,
+        { uri: caseData.scan_video_uri, name: caseData.scan_video_name ?? `scan.${ext}`, type: contentType },
+        contentType
+      );
+      fileUrl = path;
     } catch {}
   }
 
@@ -982,17 +1011,9 @@ export async function uploadInstituteLicense(
 ): Promise<string> {
   if (file.uri === "mock://license") return "";
   const ext = file.name.split(".").pop() ?? "pdf";
-  const path = `institute-licenses/${userId}/license.${ext}`;
-  const response = await fetch(file.uri);
-  const blob = await response.blob();
-  const { error } = await supabase.storage
-    .from("medical-licenses")
-    .upload(path, blob, { contentType: file.type, upsert: true });
-  if (error) throw error;
-  const { data: urlData } = supabase.storage
-    .from("medical-licenses")
-    .getPublicUrl(path);
-  return urlData?.publicUrl ?? "";
+  const path = `institute-licenses/${userId}/license_${Date.now()}.${ext}`;
+  const { publicUrl } = await uploadFile("medical-licenses", path, file, file.type);
+  return publicUrl;
 }
 
 // ─── EMERGENCY CONTACTS ───────────────────────────────────────────────────────
