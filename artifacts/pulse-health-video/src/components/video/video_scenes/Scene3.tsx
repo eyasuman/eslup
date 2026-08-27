@@ -12,25 +12,10 @@ export function Scene3() {
       exit={{ opacity: 0, y: -50, filter: 'blur(10px)' }}
       transition={{ duration: 1, ease }}
     >
-      {/* Background Typography */}
-      <motion.div 
-        className="absolute right-16 top-1/2 -translate-y-1/2 max-w-sm hidden lg:block text-right"
-        initial={{ opacity: 0, x: 50 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 1, ease }}
-      >
-        <h2 className="text-4xl font-display font-bold text-white mb-4">
-          Book in <span className="text-[#D97706]">Seconds</span>
-        </h2>
-        <p className="text-lg text-slate-300">
-          Choose your service type and confirm. Submit your payment securely.
-        </p>
-      </motion.div>
-
       <PhoneFrame
-        initial={{ scale: 1 }}
-        animate={{ scale: 0.95 }}
-        transition={{ duration: 11, ease: "linear" }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, ease: "linear" }}
       >
         <motion.div
           className="w-full h-full bg-[#F4F7FB] flex flex-col relative"
@@ -124,7 +109,7 @@ export function Scene3() {
             <motion.div 
               className="w-full bg-[#315d93] h-14 rounded-xl flex items-center justify-center text-white font-bold text-lg"
               animate={{ scale: [1, 0.95, 1] }}
-              transition={{ delay: 3.8, duration: 0.3 }}
+              transition={{ delay: 3.0, duration: 0.3 }}
             >
               Submit Payment Proof
             </motion.div>
@@ -135,7 +120,7 @@ export function Scene3() {
             className="absolute inset-0 bg-white z-20 flex flex-col items-center justify-center p-8 text-center"
             initial={{ y: "100%" }}
             animate={{ y: ["100%", "0%", "0%"] }}
-            transition={{ times: [0, 0.1, 1], duration: 6, delay: 4.5, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ times: [0, 0.1, 1], duration: 5, delay: 3.5, ease: [0.16, 1, 0.3, 1] }}
           >
             <div className="w-16 h-16 bg-[#059669]/10 rounded-full flex items-center justify-center mb-4">
               <svg className="w-8 h-8 text-[#059669]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -169,7 +154,7 @@ export function Scene3() {
           className="absolute z-50 pointer-events-none"
           initial={{ x: 180, y: 750, opacity: 0 }}
           animate={{ y: [750, 680, 680, 750], opacity: [0, 1, 1, 0] }}
-          transition={{ duration: 2, delay: 3, ease: "easeInOut" }}
+          transition={{ duration: 1.5, delay: 2.5, ease: "easeInOut" }}
         >
           <div className="w-12 h-12 rounded-full bg-white/20 shadow-2xl flex items-center justify-center backdrop-blur-sm border border-white/50">
             <div className="w-4 h-4 bg-white rounded-full shadow-inner" />

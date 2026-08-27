@@ -7,12 +7,12 @@ interface PhoneFrameProps extends HTMLMotionProps<"div"> {
 export function PhoneFrame({ children, className = "", ...props }: PhoneFrameProps) {
   return (
     <motion.div
-      className={`relative w-[360px] h-[780px] bg-white rounded-[3rem] border-[12px] border-[#0f172a] shadow-2xl overflow-hidden flex flex-col ${className}`}
+      className={`absolute inset-0 bg-white overflow-hidden flex flex-col ${className}`}
       {...props}
     >
-      {/* Dynamic Island / Notch */}
-      <div className="absolute top-0 inset-x-0 h-7 flex justify-center z-50 pointer-events-none">
-        <div className="w-28 h-7 bg-[#0f172a] rounded-b-2xl" />
+      {/* Subtle Notch for realism */}
+      <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-50 pointer-events-none">
+        <div className="w-24 h-6 bg-black rounded-b-2xl shadow-sm" />
       </div>
       
       {/* Screen Content */}
@@ -21,9 +21,12 @@ export function PhoneFrame({ children, className = "", ...props }: PhoneFramePro
       </div>
 
       {/* Home Indicator */}
-      <div className="absolute bottom-2 inset-x-0 flex justify-center z-50 pointer-events-none">
-        <div className="w-32 h-1 bg-black/20 rounded-full" />
+      <div className="absolute bottom-1 inset-x-0 flex justify-center z-50 pointer-events-none">
+        <div className="w-32 h-1 bg-black/30 rounded-full" />
       </div>
+      
+      {/* Subtle edge overlay to sell the device feel without thick borders */}
+      <div className="absolute inset-0 pointer-events-none border-[3px] border-black/10 rounded-[2.5rem] mix-blend-overlay z-50" />
     </motion.div>
   );
 }

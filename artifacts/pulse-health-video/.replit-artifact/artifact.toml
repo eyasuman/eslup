@@ -2,7 +2,7 @@ kind = "video"
 previewPath = "/pulse-health-video/"
 title = "Pulse Health — Connected Care"
 description = "A 116-second animated product advertising film demonstrating Pulse Health workflows for patients, healthcare providers, and institutes, with synchronized English narration, music, sound design, and realistic app interactions."
-videoAspectRatio = "16:9"
+videoAspectRatio = "9:19.5"
 router = "path"
 
 [[services]]

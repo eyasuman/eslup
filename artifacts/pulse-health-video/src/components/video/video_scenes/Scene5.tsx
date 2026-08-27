@@ -12,25 +12,10 @@ export function Scene5() {
       exit={{ opacity: 0, x: "-100%", filter: 'blur(10px)' }}
       transition={{ duration: 1, ease }}
     >
-      {/* Background Typography */}
-      <motion.div 
-        className="absolute right-16 top-1/2 -translate-y-1/2 max-w-sm hidden lg:block text-right"
-        initial={{ opacity: 0, x: 50 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 1, delay: 1, ease }}
-      >
-        <h2 className="text-4xl font-display font-bold text-white mb-4">
-          Institute <span className="text-[#0D9488]">Dashboard</span>
-        </h2>
-        <p className="text-lg text-slate-300">
-          Oversee your network, manage profile details, active services, and facility capacity.
-        </p>
-      </motion.div>
-
       <PhoneFrame
-        initial={{ x: "100%", scale: 0.9, rotateY: -10 }}
-        animate={{ x: 0, scale: 1, rotateY: 0 }}
-        transition={{ duration: 1.5, ease }}
+        initial={{ x: "100%", opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ duration: 0.8, ease }}
         className="bg-slate-50"
       >
         <div className="w-full h-full bg-slate-50 flex flex-col">
@@ -126,7 +111,7 @@ export function Scene5() {
           className="absolute z-50 pointer-events-none"
           initial={{ x: 300, y: 700, opacity: 0 }}
           animate={{ x: [300, 270, 270, 300], y: [700, 520, 520, 700], opacity: [0, 1, 1, 0] }}
-          transition={{ duration: 2, delay: 6, ease: "easeInOut" }}
+          transition={{ duration: 1.5, delay: 4.5, ease: "easeInOut" }}
         >
           <div className="w-12 h-12 rounded-full bg-black/20 shadow-2xl flex items-center justify-center backdrop-blur-sm border border-white/50">
             <div className="w-4 h-4 bg-white rounded-full shadow-inner" />

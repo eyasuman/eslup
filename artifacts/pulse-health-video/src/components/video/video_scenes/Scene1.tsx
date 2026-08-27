@@ -13,9 +13,9 @@ export function Scene1() {
       transition={{ duration: 1, ease }}
     >
       <PhoneFrame
-        initial={{ y: 200, scale: 0.8, rotateX: 20 }}
-        animate={{ y: 0, scale: 1, rotateX: 0 }}
-        transition={{ duration: 1.5, ease: "easeOut" }}
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 1, ease: "easeOut" }}
       >
         {/* Header matching real app */}
         <div className="bg-gradient-to-b from-[#202937] to-[#315d93] pt-14 pb-8 px-5">
@@ -58,7 +58,7 @@ export function Scene1() {
               className="flex-1 items-center flex flex-col gap-2"
               initial={{ scale: 1 }}
               animate={{ scale: [1, 0.9, 1] }}
-              transition={{ delay: 6.8, duration: 0.3 }}
+              transition={{ delay: 3.8, duration: 0.3 }}
             >
               <div className="w-16 h-16 rounded-full bg-[#315d93]/10 flex items-center justify-center">
                 <svg className="w-7 h-7 text-[#315d93]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -135,28 +135,13 @@ export function Scene1() {
           className="absolute z-50 pointer-events-none"
           initial={{ x: 100, y: 500, opacity: 0 }}
           animate={{ x: 30, y: 320, opacity: [0, 1, 1, 0] }}
-          transition={{ duration: 2, ease: "easeInOut", delay: 5.5 }}
+          transition={{ duration: 1.5, ease: "easeInOut", delay: 2.5 }}
         >
           <div className="w-12 h-12 rounded-full bg-white/20 shadow-2xl flex items-center justify-center backdrop-blur-sm border border-white/50">
             <div className="w-4 h-4 bg-white rounded-full shadow-inner" />
           </div>
         </motion.div>
       </PhoneFrame>
-
-      {/* Hero Typography on the side */}
-      <motion.div 
-        className="ml-16 max-w-lg hidden lg:block"
-        initial={{ opacity: 0, x: 50 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 1, delay: 1, ease }}
-      >
-        <h1 className="text-5xl font-display font-bold text-white leading-tight mb-4">
-          Meet <span className="text-[#7FA8D8]">Pulse Health</span>.
-        </h1>
-        <p className="text-xl text-slate-300">
-          A fully connected ecosystem in your pocket.
-        </p>
-      </motion.div>
     </motion.div>
   );
 }

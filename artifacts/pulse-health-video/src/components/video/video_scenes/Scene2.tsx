@@ -12,31 +12,16 @@ export function Scene2() {
       exit={{ opacity: 0, x: "-50%", filter: 'blur(10px)' }}
       transition={{ duration: 1, ease }}
     >
-      {/* Background Typography */}
-      <motion.div 
-        className="absolute left-16 top-1/2 -translate-y-1/2 max-w-sm hidden lg:block"
-        initial={{ opacity: 0, x: -50 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 1, ease }}
-      >
-        <h2 className="text-4xl font-display font-bold text-white mb-4">
-          Discover <span className="text-[#059669]">Care</span>
-        </h2>
-        <p className="text-lg text-slate-300">
-          Explore verified specialists, review profiles, and check real-time availability.
-        </p>
-      </motion.div>
-
       <PhoneFrame
-        initial={{ scale: 0.95 }}
-        animate={{ scale: 1 }}
-        transition={{ duration: 10, ease: "linear" }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, ease: "linear" }}
       >
         <motion.div
           className="w-[200%] h-full flex"
           initial={{ x: "0%" }}
           animate={{ x: "-50%" }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 4 }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 3 }}
         >
           {/* View 1: Specialist List */}
           <div className="w-1/2 h-full bg-[#F4F7FB] flex flex-col">
@@ -164,10 +149,10 @@ export function Scene2() {
             opacity: [0, 1, 1, 0, 0, 1, 1, 0] 
           }}
           transition={{ 
-            duration: 9, 
-            times: [0, 0.2, 0.4, 0.45, 0.5, 0.8, 0.95, 1],
+            duration: 7, 
+            times: [0, 0.2, 0.35, 0.4, 0.45, 0.8, 0.95, 1],
             ease: "easeInOut",
-            delay: 1 
+            delay: 0.5 
           }}
         >
           <div className="w-12 h-12 rounded-full bg-white/20 shadow-2xl flex items-center justify-center backdrop-blur-sm border border-white/50">

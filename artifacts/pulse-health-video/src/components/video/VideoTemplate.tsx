@@ -10,12 +10,12 @@ import { Scene5 } from './video_scenes/Scene5';
 import { Scene6 } from './video_scenes/Scene6';
 
 export const SCENE_DURATIONS = {
-  s1_home: 9000,
-  s2_specialist: 11000,
-  s3_booking: 11000,
-  s4_provider: 11000,
-  s5_institute: 11000,
-  s6_outro: 7000,
+  s1_home: 6000,
+  s2_specialist: 8000,
+  s3_booking: 9000,
+  s4_provider: 8000,
+  s5_institute: 7000,
+  s6_outro: 5000,
 };
 
 const SCENE_COMPONENTS: Record<string, ComponentType> = {
@@ -72,7 +72,7 @@ export default function VideoTemplate({
   }, [baseSceneKey, currentSceneKey, muted]);
 
   return (
-    <div className="w-full h-screen overflow-hidden relative bg-[#020617] font-sans flex items-center justify-center">
+    <div className="w-full h-full overflow-hidden relative bg-[#020617] font-sans flex items-center justify-center">
       <audio
         ref={audioRef}
         src={`${import.meta.env.BASE_URL}audio/composite_audio.mp3`}
@@ -82,20 +82,20 @@ export default function VideoTemplate({
         className="hidden"
       />
       
-      {/* Background Ambience */}
-      <div className="absolute inset-0 pointer-events-none">
-        <motion.div 
-          className="absolute inset-0 bg-gradient-to-br from-[#0f172a] via-[#020617] to-[#1e1b4b] opacity-80"
-          animate={{ backgroundPosition: ["0% 0%", "100% 100%"] }}
-          transition={{ duration: 20, repeat: Infinity, repeatType: "mirror" }}
-        />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(49,93,147,0.15)_0%,rgba(0,0,0,0)_70%)]" />
+      {/* Persistent App Container scaled to fill the 9:19.5 canvas */}
+      <div 
+        className="relative origin-center"
+        style={{
+          width: '360px',
+          height: '780px',
+          // Force scale to fill whatever the parent is, assuming parent is 9:19.5
+          transform: 'scale(max(calc(100vw / 360), calc(100vh / 780)))'
+        }}
+      >
+        <AnimatePresence mode="popLayout">
+          {SceneComponent && <SceneComponent key={currentSceneKey} />}
+        </AnimatePresence>
       </div>
-
-      {/* Persistent App Container (The "Phone" perspective is handled per-scene for rotation effects, but they all render within this space) */}
-      <AnimatePresence mode="popLayout">
-        {SceneComponent && <SceneComponent key={currentSceneKey} />}
-      </AnimatePresence>
     </div>
   );
 }

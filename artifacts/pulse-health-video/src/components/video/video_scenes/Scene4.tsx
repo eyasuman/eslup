@@ -6,31 +6,16 @@ const ease = [0.16, 1, 0.3, 1] as const;
 export function Scene4() {
   return (
     <motion.div
-      className="absolute inset-0 flex items-center justify-center perspective-[2000px]"
+      className="absolute inset-0 flex items-center justify-center"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 1.1, filter: 'blur(10px)' }}
       transition={{ duration: 1, ease }}
     >
-      {/* Background Typography */}
-      <motion.div 
-        className="absolute left-16 top-1/2 -translate-y-1/2 max-w-sm hidden lg:block text-left"
-        initial={{ opacity: 0, x: -50 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 1, delay: 1, ease }}
-      >
-        <h2 className="text-4xl font-display font-bold text-white mb-4">
-          Provider <span className="text-[#315d93]">Dashboard</span>
-        </h2>
-        <p className="text-lg text-slate-300">
-          Review appointment details and manage your schedule effortlessly.
-        </p>
-      </motion.div>
-
       <PhoneFrame
-        initial={{ rotateY: 180, scale: 0.8, x: 100 }}
-        animate={{ rotateY: 0, scale: 1, x: 0 }}
-        transition={{ duration: 1.5, ease }}
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.8, ease }}
         className="bg-[#202937]"
       >
         <div className="w-full h-full bg-[#111827] flex flex-col">
@@ -113,7 +98,7 @@ export function Scene4() {
                 <motion.div 
                   className="flex-1 border border-red-500/30 text-red-400 py-2 rounded-lg text-center font-bold text-sm"
                   animate={{ opacity: [1, 0] }}
-                  transition={{ delay: 4.8, duration: 0.3 }}
+                  transition={{ delay: 3.8, duration: 0.3 }}
                 >
                   Decline
                 </motion.div>
@@ -121,7 +106,7 @@ export function Scene4() {
                 <motion.div 
                   className="flex-1 bg-[#059669] text-white py-2 rounded-lg text-center font-bold text-sm"
                   animate={{ scale: [1, 0.9, 1] }}
-                  transition={{ delay: 4.8, duration: 0.3 }}
+                  transition={{ delay: 3.8, duration: 0.3 }}
                 >
                   Accept
                 </motion.div>
@@ -132,7 +117,7 @@ export function Scene4() {
                 className="absolute inset-0 bg-[#059669] flex flex-col items-center justify-center"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: [0, 1] }}
-                transition={{ delay: 5.2, duration: 0.3 }}
+                transition={{ delay: 4.2, duration: 0.3 }}
               >
                 <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-2">
                   <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -177,7 +162,7 @@ export function Scene4() {
           className="absolute z-50 pointer-events-none"
           initial={{ x: 250, y: 750, opacity: 0 }}
           animate={{ x: [250, 240, 240, 250], y: [750, 520, 520, 750], opacity: [0, 1, 1, 0] }}
-          transition={{ duration: 2, delay: 4, ease: "easeInOut" }}
+          transition={{ duration: 2, delay: 3, ease: "easeInOut" }}
         >
           <div className="w-12 h-12 rounded-full bg-white/20 shadow-2xl flex items-center justify-center backdrop-blur-sm border border-white/50">
             <div className="w-4 h-4 bg-white rounded-full shadow-inner" />

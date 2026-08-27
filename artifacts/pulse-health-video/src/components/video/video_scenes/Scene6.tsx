@@ -13,9 +13,9 @@ export function Scene6() {
       transition={{ duration: 1.5, ease }}
     >
       <PhoneFrame
-        initial={{ x: 0, scale: 1, rotateY: 0 }}
-        animate={{ scale: [1, 1, 0], y: [0, 0, 500], rotateX: [0, 0, 45], opacity: [1, 1, 0] }}
-        transition={{ duration: 3, times: [0, 0.5, 1], ease: "easeInOut", delay: 2.5 }}
+        initial={{ x: 0, opacity: 0 }}
+        animate={{ opacity: [1, 1, 0], scale: [1, 1, 1.1] }}
+        transition={{ duration: 5, times: [0, 0.8, 1], ease: "easeInOut" }}
       >
         <div className="w-full h-full bg-[#F4F7FB] flex flex-col relative">
           {/* Header */}
@@ -72,13 +72,13 @@ export function Scene6() {
       <motion.div
         className="absolute inset-0 bg-[#315d93] flex flex-col items-center justify-center z-50"
         initial={{ opacity: 0 }}
-        animate={{ opacity: [0, 0, 1] }}
-        transition={{ duration: 3, times: [0, 0.8, 1], ease: "easeInOut", delay: 2.5 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5, ease: "easeInOut", delay: 3.0 }}
       >
         <motion.div
           initial={{ scale: 0.5, opacity: 0, y: 50 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
-          transition={{ duration: 1, ease: "easeOut", delay: 4.8 }}
+          transition={{ duration: 0.8, ease: "easeOut", delay: 3.5 }}
           className="flex flex-col items-center"
         >
           {/* Logo Mark */}
