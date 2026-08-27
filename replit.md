@@ -44,11 +44,15 @@ All secrets are stored in Replit Secrets (not in `.env` files).
 
 ## Video consultations
 
-Video calls use Jitsi Meet for the encrypted audio/video room and Supabase
-Realtime for patient/provider call invitations. Before testing calls, apply
+Video calls use Jitsi Meet for the audio/video room and Supabase Realtime for
+patient/provider call invitations. Every invitation generates and persists a
+unique room token; providers only join rooms from an accepted invitation.
+Before testing calls, apply
 `scripts/supabase-migration.sql` to the connected Supabase project so the
-`calls` table, its access policies, and its Realtime publication exist. The
-mobile app asks for camera and microphone permission before it enters a room.
+`calls` table, its transition policies, and its Realtime publication exist.
+The mobile app asks for camera and microphone permission before it enters a
+room. For regulated deployments, use a Jitsi provider with authenticated room
+access rather than the public Jitsi service.
 
 ## User roles
 

@@ -1,3 +1,4 @@
+import * as Crypto from "expo-crypto";
 import { supabase } from "@/lib/supabase";
 
 export interface Call {
@@ -85,9 +86,6 @@ export function subscribeToIncomingCalls(
     .subscribe();
 }
 
-export function generateRoomName(doctorId: string): string {
-  const safe = (doctorId ?? "doc").replace(/[^a-zA-Z0-9]/g, "").slice(0, 12);
-  const ts = Math.floor(Date.now() / 1000);
-  const rand = Math.floor(Math.random() * 9000) + 1000;
-  return `pulse-${safe}-${ts}-${rand}`;
+export function generateRoomName(): string {
+  return `pulse-${Crypto.randomUUID().replace(/-/g, "")}`;
 }

@@ -854,21 +854,15 @@ export default function ProviderDashboard() {
                       <Pressable
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                          router.push({
-                            pathname: "/video-consultation",
-                            params: {
-                              appointmentId: req.id,
-                              doctorId: user?.id ?? "",
-                              doctorName: user?.name ?? "Dr. Provider",
-                              specialty: "",
-                              isDoctor: "true",
-                            },
-                          });
+                          Alert.alert(
+                            "Waiting for a secure invitation",
+                            "Ask the patient to start the consultation. Accept their invitation here to join its private room."
+                          );
                         }}
                         style={({ pressed }) => [styles.actionBtn, { backgroundColor: "#315d93", flex: 1, opacity: pressed ? 0.8 : 1 }]}
                       >
                         <Feather name="video" size={14} color="#fff" />
-                        <Text style={[styles.actionBtnText, { color: "#fff" }]}>Join Video Call</Text>
+                        <Text style={[styles.actionBtnText, { color: "#fff" }]}>Await Video Call</Text>
                       </Pressable>
                     </View>
                   )}

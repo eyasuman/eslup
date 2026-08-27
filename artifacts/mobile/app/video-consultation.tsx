@@ -3,7 +3,7 @@ import { CameraView, useCameraPermissions, useMicrophonePermissions } from "expo
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
@@ -48,7 +48,9 @@ export default function VideoConsultationScreen() {
   const displayName = doctorName || "Dr. Provider";
   const displaySpec = specialty || "Specialist";
 
-  const [phase, setPhase] = useState<Phase>(isDoctorJoining ? "call" : "precheck");
+  const [phase, setPhase] = useState<Phase>(
+    isDoctorJoining && paramRoomName ? "mediacheck" : "precheck"
+  );
   const [symptoms, setSymptoms] = useState("");
   const [duration, setDuration] = useState("");
   const [severity, setSeverity] = useState<"mild" | "moderate" | "severe">("mild");
@@ -145,20 +147,28 @@ export default function VideoConsultationScreen() {
     return () => { supabase.removeChannel(sub); };
   }, [appointmentId, isDoctorJoining]);
 
-  // Always use appointmentId-based room when available — guarantees both sides join the same room
-  const roomName = useRef(
-    paramRoomName ??
-      appointmentData?.jitsiRoomId ??
-      (appointmentId
-        ? `pulse_${appointmentId.replace(/[^a-zA-Z0-9]/g, "")}`
-        : `pulse${(doctorId ?? "doctor").replace(/[^a-zA-Z0-9]/g, "").slice(0, 12)}${Math.floor(
-            Date.now() / 86400000
-          )}`)
-  ).current;
+  // The room is generated once per invitation and persisted in Supabase. Providers
+  // only enter a room supplied by the accepted invitation record.
+  const [roomName, setRoomName] = useState<string | null>(paramRoomName ?? null);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const callStatusSubRef = useRef<any>(null);
+  const currentCallIdRef = useRef<string | null>(null);
+  const callAcceptedRef = useRef(false);
+
+  const cancelPendingCall = useCallback(async () => {
+    const callId = currentCallIdRef.current;
+    if (!callId || callAcceptedRef.current) return;
+
+    currentCallIdRef.current = null;
+    setCurrentCallId(null);
+    try {
+      await updateCallStatus(callId, "ended");
+    } catch (error) {
+      console.warn("Unable to cancel pending video invitation", error);
+    }
+  }, []);
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -174,24 +184,37 @@ export default function VideoConsultationScreen() {
   useEffect(() => {
     if (phase !== "waiting") return;
 
+    let isActive = true;
+
     const initiateCall = async () => {
       if (!user?.id || !doctorId) return;
       try {
+        const invitationRoomName = roomName ?? generateRoomName();
         const call = await createCall({
           doctor_id: doctorId,
           patient_id: user.id,
           patient_name: user.name ?? "Patient",
-          room_name: roomName,
+          room_name: invitationRoomName,
         });
+        if (!isActive) {
+          await updateCallStatus(call.id, "ended").catch(() => {});
+          return;
+        }
+
+        setRoomName(call.room_name);
         setCurrentCallId(call.id);
+        currentCallIdRef.current = call.id;
+        callAcceptedRef.current = false;
         setWaitingForAccept(true);
 
         callStatusSubRef.current = subscribeToCallStatus(call.id, (updatedCall: Call) => {
           if (updatedCall.status === "accepted") {
+            callAcceptedRef.current = true;
             setWaitingForAccept(false);
             setConnectionProgress(100);
             setTimeout(() => setPhase("call"), 400);
           } else if (updatedCall.status === "rejected") {
+            currentCallIdRef.current = null;
             setWaitingForAccept(false);
             Alert.alert(
               "Call Declined",
@@ -224,11 +247,13 @@ export default function VideoConsultationScreen() {
     }, 120);
 
     return () => {
+      isActive = false;
       clearInterval(interval);
       if (callStatusSubRef.current) {
         supabase.removeChannel(callStatusSubRef.current);
         callStatusSubRef.current = null;
       }
+      void cancelPendingCall();
     };
   }, [phase]);
 
@@ -246,15 +271,20 @@ export default function VideoConsultationScreen() {
   const endCall = async () => {
     if (callTimerRef.current) clearInterval(callTimerRef.current);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    if (currentCallId) {
-      await updateCallStatus(currentCallId, "ended").catch(() => {});
+    const callId = currentCallIdRef.current;
+    if (callId) {
+      await updateCallStatus(callId, "ended").catch(() => {});
+      currentCallIdRef.current = null;
+      setCurrentCallId(null);
     }
     setPhase("postcall");
   };
 
-  const jitsiUrl = `https://meet.jit.si/${roomName}#userInfo.displayName="${encodeURIComponent(
-    isDoctorJoining ? displayName : user?.name ?? "Patient"
-  )}"&config.startWithVideoMuted=${String(!isCameraOn)}&config.startWithAudioMuted=${String(!isMicOn)}&config.prejoinPageEnabled=false&config.disableDeepLinking=true&interfaceConfig.SHOW_JITSI_WATERMARK=false&interfaceConfig.MOBILE_APP_PROMO=false`;
+  const jitsiUrl = roomName
+    ? `https://meet.jit.si/${roomName}#userInfo.displayName="${encodeURIComponent(
+        isDoctorJoining ? displayName : user?.name ?? "Patient"
+      )}"&config.startWithVideoMuted=${String(!isCameraOn)}&config.startWithAudioMuted=${String(!isMicOn)}&config.prejoinPageEnabled=false&config.disableDeepLinking=true&interfaceConfig.SHOW_JITSI_WATERMARK=false&interfaceConfig.MOBILE_APP_PROMO=false`
+    : "";
 
   /* ─── LOCKED STATE (Wait for Payment Verification) ─── */
   if (lockStatus === 'verifying') {
@@ -320,7 +350,13 @@ export default function VideoConsultationScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.headerRow}>
-            <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <Pressable
+              onPress={() => {
+                void cancelPendingCall();
+                router.back();
+              }}
+              style={styles.backBtn}
+            >
               <Feather name="arrow-left" size={22} color="#fff" />
             </Pressable>
             <View style={{ flex: 1 }}>
@@ -515,7 +551,7 @@ export default function VideoConsultationScreen() {
                 return;
               }
               setCallError(null);
-              setPhase("waiting");
+              setPhase(isDoctorJoining ? "call" : "waiting");
             }}
             style={styles.continueBtn}
           >
@@ -573,13 +609,19 @@ export default function VideoConsultationScreen() {
               <View style={styles.callErrorCard}>
                 <Feather name="alert-triangle" size={18} color="#FCA5A5" />
                 <Text style={styles.callErrorText}>{callError}</Text>
-                <Pressable onPress={() => setPhase("mediacheck")} style={styles.retryBtn}>
+                <Pressable
+                  onPress={() => {
+                    void cancelPendingCall();
+                    setPhase("mediacheck");
+                  }}
+                  style={styles.retryBtn}
+                >
                   <Text style={styles.retryBtnText}>Try again</Text>
                 </Pressable>
               </View>
             ) : (
               <>
-                <Text style={styles.connectionTitle}>Preparing your secure session…</Text>
+                <Text style={styles.connectionTitle}>Preparing your private session…</Text>
                 {steps.map((step) => (
                   <View key={step.label} style={styles.checkRow}>
                     <View
@@ -669,7 +711,7 @@ export default function VideoConsultationScreen() {
           </View>
           <View style={styles.encryptedPill}>
             <Feather name="lock" size={12} color="#7FA8D8" />
-            <Text style={styles.encryptedText}>E2E</Text>
+            <Text style={styles.encryptedText}>PRIVATE LINK</Text>
           </View>
         </View>
 
@@ -713,7 +755,7 @@ export default function VideoConsultationScreen() {
                 marginTop: 12,
               }}
             >
-              Room: {roomName}
+              Room: {roomName ?? "Preparing secure invitation…"}
             </Text>
           </View>
         ) : (
