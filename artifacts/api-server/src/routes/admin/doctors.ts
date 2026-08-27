@@ -14,7 +14,7 @@ router.get("/doctors", async (req, res) => {
   return res.json(data ?? []);
 });
 
-// GET /api/admin/doctors/:id/license-url — signed URL for the private medical-licenses bucket
+// GET /api/admin/doctors/:id/license-url — metadata-backed private upload only.
 router.get("/doctors/:id/license-url", async (req, res) => {
   const { id } = req.params;
   const { data: doctor, error: fetchError } = await supabaseAdmin
@@ -23,30 +23,20 @@ router.get("/doctors/:id/license-url", async (req, res) => {
     .eq("id", id)
     .single();
   if (fetchError) return res.status(404).json({ error: fetchError.message });
-  let path: string | undefined;
-  let bucket = "medical-licenses";
-  let name = doctor?.licenseFile?.name;
-  let type = doctor?.licenseFile?.type;
-  if (doctor?.licenseUploadId) {
-    const { data: upload, error: uploadError } = await supabaseAdmin
-      .from("user_uploads")
-      .select("bucket, storage_path, original_name, mime_type, status")
-      .eq("id", doctor.licenseUploadId)
-      .single();
-    if (uploadError || upload?.status !== "active") return res.status(404).json({ error: "License upload not found" });
-    path = upload.storage_path;
-    bucket = upload.bucket;
-    name = upload.original_name;
-    type = upload.mime_type;
-  } else {
-    path = doctor?.licenseFile?.path;
+  if (!doctor?.licenseUploadId) {
+    return res.status(410).json({ error: "Legacy license records without user_uploads metadata cannot be accessed" });
   }
-  if (!path) return res.status(404).json({ error: "No license file on record for this doctor" });
+  const { data: upload, error: uploadError } = await supabaseAdmin
+    .from("user_uploads")
+    .select("bucket, storage_path, original_name, mime_type, status")
+    .eq("id", doctor.licenseUploadId)
+    .single();
+  if (uploadError || upload?.status !== "active") return res.status(404).json({ error: "License upload not found" });
   const { data, error } = await supabaseAdmin.storage
-    .from(bucket)
-    .createSignedUrl(path, 60 * 10); // 10 minutes
+    .from(upload.bucket)
+    .createSignedUrl(upload.storage_path, 60 * 10); // 10 minutes
   if (error) return res.status(500).json({ error: error.message });
-  return res.json({ url: data.signedUrl, name, type, expiresIn: 600 });
+  return res.json({ url: data.signedUrl, name: upload.original_name, type: upload.mime_type, expiresIn: 600 });
 });
 
 // POST /api/admin/doctors/:id/approve

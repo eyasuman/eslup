@@ -119,9 +119,92 @@ CREATE POLICY "user_uploads_objects_delete" ON storage.objects
 
 ALTER TABLE IF EXISTS public.doctors
   ADD COLUMN IF NOT EXISTS "profileImageUploadId" UUID REFERENCES public.user_uploads(id),
-  ADD COLUMN IF NOT EXISTS "licenseUploadId" UUID REFERENCES public.user_uploads(id);
-ALTER TABLE IF EXISTS public.institute_pulse
-  ADD COLUMN IF NOT EXISTS "licenseUploadId" UUID REFERENCES public.user_uploads(id);
+  ADD COLUMN IF NOT EXISTS "licenseUploadId" UUID REFERENCES public.user_uploads(id),
+  ADD COLUMN IF NOT EXISTS "certificateUploadId" UUID REFERENCES public.user_uploads(id),
+  ADD COLUMN IF NOT EXISTS "certificateFile" JSONB;
+
+-- ── Institute applications ────────────────────────────────────
+-- This is deliberately separate from the public `institutions` directory table.
+-- `institute_pulse` is the account/application record owned by one auth user.
+CREATE TABLE IF NOT EXISTS public.institute_pulse (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId" UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Active', 'Declined')),
+  email TEXT,
+  phone TEXT,
+  address TEXT,
+  city TEXT,
+  "licenseNo" TEXT,
+  "licenseUploadId" UUID REFERENCES public.user_uploads(id),
+  "totalDoctors" INTEGER NOT NULL DEFAULT 0 CHECK ("totalDoctors" >= 0),
+  "totalBeds" INTEGER CHECK ("totalBeds" >= 0),
+  services TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  accreditations JSONB,
+  lat DOUBLE PRECISION,
+  lng DOUBLE PRECISION,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE public.institute_pulse
+  ADD COLUMN IF NOT EXISTS "userId" UUID,
+  ADD COLUMN IF NOT EXISTS name TEXT,
+  ADD COLUMN IF NOT EXISTS type TEXT,
+  ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Pending',
+  ADD COLUMN IF NOT EXISTS email TEXT,
+  ADD COLUMN IF NOT EXISTS phone TEXT,
+  ADD COLUMN IF NOT EXISTS address TEXT,
+  ADD COLUMN IF NOT EXISTS city TEXT,
+  ADD COLUMN IF NOT EXISTS "licenseNo" TEXT,
+  ADD COLUMN IF NOT EXISTS "licenseUploadId" UUID REFERENCES public.user_uploads(id),
+  ADD COLUMN IF NOT EXISTS "totalDoctors" INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "totalBeds" INTEGER,
+  ADD COLUMN IF NOT EXISTS services TEXT[] DEFAULT ARRAY[]::TEXT[],
+  ADD COLUMN IF NOT EXISTS accreditations JSONB,
+  ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT NOW();
+CREATE UNIQUE INDEX IF NOT EXISTS institute_pulse_user_id_unique
+  ON public.institute_pulse ("userId");
+ALTER TABLE public.institute_pulse DROP CONSTRAINT IF EXISTS institute_pulse_status_check;
+-- NOT VALID keeps legacy rows readable while enforcing the canonical states for
+-- all newly written rows. Clean historical values before validating it later.
+ALTER TABLE public.institute_pulse ADD CONSTRAINT institute_pulse_status_check
+  CHECK (status IN ('Pending', 'Active', 'Declined')) NOT VALID;
+ALTER TABLE public.institute_pulse ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS institute_pulse_owner_select ON public.institute_pulse;
+DROP POLICY IF EXISTS institute_pulse_owner_insert ON public.institute_pulse;
+DROP POLICY IF EXISTS institute_pulse_owner_update ON public.institute_pulse;
+DROP POLICY IF EXISTS institute_pulse_public_active_select ON public.institute_pulse;
+DROP POLICY IF EXISTS institute_pulse_service_role ON public.institute_pulse;
+CREATE POLICY institute_pulse_owner_select ON public.institute_pulse
+  FOR SELECT USING ("userId" = auth.uid());
+CREATE POLICY institute_pulse_owner_insert ON public.institute_pulse
+  FOR INSERT WITH CHECK ("userId" = auth.uid() AND status = 'Pending');
+CREATE POLICY institute_pulse_owner_update ON public.institute_pulse
+  FOR UPDATE USING ("userId" = auth.uid()) WITH CHECK ("userId" = auth.uid());
+CREATE POLICY institute_pulse_public_active_select ON public.institute_pulse
+  FOR SELECT USING (status = 'Active');
+CREATE POLICY institute_pulse_service_role ON public.institute_pulse
+  FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+CREATE OR REPLACE FUNCTION public.touch_institute_pulse_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+  IF auth.role() <> 'service_role'
+    AND NEW.status IS DISTINCT FROM OLD.status
+    AND NOT (OLD.status = 'Declined' AND NEW.status = 'Pending') THEN
+    RAISE EXCEPTION 'Institute application status can only be changed by an administrator';
+  END IF;
+  NEW."updatedAt" = NOW();
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS institute_pulse_touch_updated_at ON public.institute_pulse;
+CREATE TRIGGER institute_pulse_touch_updated_at
+  BEFORE UPDATE ON public.institute_pulse
+  FOR EACH ROW EXECUTE FUNCTION public.touch_institute_pulse_updated_at();
 
 -- Provider and institute map coordinates are nullable, but must be stored as a
 -- complete, valid pair. (0,0) is rejected because legacy UI used it as a

@@ -36,6 +36,7 @@ import {
   signOut as supabaseSignOut,
   uploadProfileImage,
   uploadCertificate,
+  getProviderCertificate,
   getSignedUploadUrl,
   submitRadiologyReport,
   submitRadiologyCase,
@@ -90,6 +91,7 @@ export default function ProviderDashboard() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [certificateUploading, setCertificateUploading] = useState(false);
   const [certificateName, setCertificateName] = useState("");
+  const [certificateUploadId, setCertificateUploadId] = useState<string | undefined>(undefined);
   const [locationLoading, setLocationLoading] = useState(false);
   const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedArea, setSelectedArea] = useState("Bole");
@@ -174,6 +176,29 @@ export default function ProviderDashboard() {
     if (!uploadId) return;
     getSignedUploadUrl(uploadId).then(setProfileImage).catch(() => {});
   }, [user?.id, (user as any)?.profileImageUploadId]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setCertificateName("");
+      setCertificateUploadId(undefined);
+      return;
+    }
+    let mounted = true;
+    getProviderCertificate(user.id)
+      .then((certificate) => {
+        if (!mounted) return;
+        setCertificateName(certificate?.name ?? "");
+        setCertificateUploadId(certificate?.uploadId);
+      })
+      .catch(() => {
+        // A certificate is optional; upload will still surface any schema issue.
+        if (mounted) {
+          setCertificateName("");
+          setCertificateUploadId(undefined);
+        }
+      });
+    return () => { mounted = false; };
+  }, [user?.id]);
 
   // Parse working institute from bio on mount ("HospitalName · languages")
   useEffect(() => {
@@ -424,17 +449,31 @@ export default function ProviderDashboard() {
       const asset = result.assets?.[0];
       if (!asset) return;
       setCertificateUploading(true);
-      await uploadCertificate(user.id, {
+      const upload = await uploadCertificate(user.id, {
         uri: asset.uri,
         name: asset.name,
         type: asset.mimeType ?? "application/octet-stream",
         size: asset.size,
-      });
-      setCertificateName(asset.name);
+      }, certificateUploadId);
+      setCertificateName(upload.originalName);
+      setCertificateUploadId(upload.id);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Certificate Stored", "Your certificate was uploaded to private storage.");
+      Alert.alert(
+        upload.cleanupPending ? "Certificate Updated" : "Certificate Stored",
+        upload.cleanupPending
+          ? "Your new certificate was saved. Cleanup of the previous file is queued and will retry automatically."
+          : "Your certificate was uploaded to private storage."
+      );
     } catch (error: any) {
-      Alert.alert("Upload Failed", error?.message ?? "The certificate could not be stored.");
+      const message = error?.message ?? "The certificate could not be stored.";
+      const schemaIssue = /certificateUploadId|certificateFile|schema cache|column .* does not exist|PGRST204/i.test(message);
+      const validationIssue = /not allowed|too large|empty|real file|selected file/i.test(message);
+      Alert.alert(
+        schemaIssue ? "Certificate Storage Needs Setup" : validationIssue ? "Invalid Certificate File" : "Upload Failed",
+        schemaIssue
+          ? "Certificate storage has not been configured yet. Please ask an administrator to apply the latest database migration."
+          : message
+      );
     } finally {
       setCertificateUploading(false);
     }

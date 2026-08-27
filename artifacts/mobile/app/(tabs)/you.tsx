@@ -123,7 +123,7 @@ export default function YouScreen() {
                 if (instProfile.status === "Pending") {
                   Alert.alert("Account Pending", "Your institute is pending admin approval. You'll be notified once it's active.", [{ text: "OK" }]);
                 } else if (instProfile.status === "Declined") {
-                  Alert.alert("Account Declined", "Your institute application was declined. Please contact support.", [{ text: "OK" }]);
+                  Alert.alert("Account Declined", "Your institute application was declined. Please update your information.", [{ text: "OK" }]);
                 }
               } else {
                 Alert.alert("No Institute Found", "No institute account found for this email. Please register first.");
@@ -168,11 +168,20 @@ export default function YouScreen() {
           setLoading(false);
           return;
         }
+        Alert.alert("Login Failed", loginMsg || "Could not sign in. Please try again.");
+        setLoading(false);
+        return;
       }
 
       await setUser({ id: userId, name: userName, email: usePhone ? "" : form.email, phone: userPhone, role: resolvedRole, doctorStatus, instituteStatus });
       await setUserRole(resolvedRole);
-      setAuthMode("select");
+
+      if (resolvedRole === "institute") {
+        if (instituteStatus === "Active") router.replace("/(institute)/dashboard");
+        else router.replace("/(institute)/status");
+      } else {
+        setAuthMode("select");
+      }
     } finally {
       setLoading(false);
     }
@@ -238,7 +247,14 @@ export default function YouScreen() {
     const quickActions = [
       { icon: "bell", label: t("notification_title"), onPress: () => router.push("/notifications") },
       ...(userRole === "institute"
-        ? [{ icon: "home", label: "Institute Profile", onPress: () => router.push("/(tabs)/you" as any) }]
+        ? [{
+            icon: "home",
+            label: "Institute Dashboard",
+            onPress: () => {
+              if (user?.instituteStatus === "Active") router.push("/(institute)/dashboard");
+              else router.push("/(institute)/status");
+            }
+          }]
         : userRole === "client"
         ? [
             { icon: "calendar", label: t("my_appointments"), onPress: () => router.push("/appointments") },

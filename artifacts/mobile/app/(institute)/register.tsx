@@ -50,7 +50,7 @@ export default function InstituteRegisterScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { setUser, setUserRole } = useApp();
-  const topPad = Platform.OS === "web" ? 0 : insets.top;
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const [step, setStep] = useState<Step>(1);
@@ -137,30 +137,15 @@ export default function InstituteRegisterScreen() {
         const authData = await signUp(form.email, form.password, form.name, "institute", form.phone);
         if (authData.user) {
           userId = authData.user.id;
-          if (!authData.session) {
-            try { await signIn(form.email, form.password); } catch {}
-          }
         }
       } catch (err: any) {
         signUpError = err;
-        const msg: string = err?.message ?? String(err);
-        if (
-          msg.toLowerCase().includes("rate limit") ||
-          msg.toLowerCase().includes("too many") ||
-          msg.includes("already registered") ||
-          msg.includes("already been registered") ||
-          msg.includes("User already registered")
-        ) {
-          try {
-            const recovered = await signIn(form.email, form.password);
-            if (recovered.user) { userId = recovered.user.id; signUpError = null; }
-          } catch {}
-        }
       }
 
       if (!userId) {
         const msg: string = signUpError?.message ?? String(signUpError ?? "Account creation failed.");
         Alert.alert("Registration Error", msg || "Could not create account. Please try again.");
+        setLoading(false);
         return;
       }
 
@@ -225,7 +210,7 @@ export default function InstituteRegisterScreen() {
         instituteStatus: "Pending",
       });
       await setUserRole("institute");
-      setSubmitted(true);
+      router.replace("/(institute)/status");
     } catch (err: any) {
       const msg: string = err?.message ?? String(err);
       Alert.alert("Registration Error", msg || "Could not complete registration. Please check your connection and try again.");
@@ -233,30 +218,6 @@ export default function InstituteRegisterScreen() {
       setLoading(false);
     }
   };
-
-  // ── SUCCESS SCREEN ────────────────────────────────────────────────────────
-  if (submitted) {
-    return (
-      <View style={[styles.container, { backgroundColor: bg }]}>
-        <View style={styles.successContainer}>
-          <View style={[styles.successIcon, { backgroundColor: accentColor + "20" }]}>
-            <Feather name="check-circle" size={64} color={accentColor} />
-          </View>
-          <Text style={[styles.successTitle, { color: textPrimary }]}>Application Submitted!</Text>
-          <Text style={[styles.successDesc, { color: textMuted }]}>
-            Your institute registration is under review. The admin team will verify your details and licence, then activate your listing within 24–48 hours.
-          </Text>
-          <View style={[styles.pendingCard, { backgroundColor: "#D97706" + "15", borderColor: "#D97706" + "30" }]}>
-            <Feather name="clock" size={20} color="#D97706" />
-            <Text style={[styles.pendingText, { color: "#D97706" }]}>Status: Pending Admin Approval</Text>
-          </View>
-          <Pressable onPress={() => router.replace("/(tabs)")} style={[styles.doneBtn, { backgroundColor: accentColor }]}>
-            <Text style={styles.doneBtnText}>Back to Home</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
 
   return (
     <KeyboardAvoidingView

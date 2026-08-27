@@ -125,6 +125,8 @@ export interface SupabaseDoctor {
   lng?: number;
   profileImageUploadId?: string;
   licenseUploadId?: string;
+  certificateUploadId?: string;
+  certificateFile?: CertificateFileMetadata;
 }
 
 export async function getDoctorByUserId(userId: string) {
@@ -384,6 +386,13 @@ export interface StoredUpload {
   signedUrl: string;
   replacedUploadId?: string;
   cleanupPending?: boolean;
+}
+
+export interface CertificateFileMetadata {
+  uploadId: string;
+  path: string;
+  name: string;
+  type: string;
 }
 
 const UPLOAD_RULES: Record<UploadCategory, { maxBytes: number; mimePrefixes: string[]; mimeTypes?: string[] }> = {
@@ -678,9 +687,88 @@ export async function uploadMedicalLicense(
 
 export async function uploadCertificate(
   userId: string,
-  file: { name: string; type: string; uri: string; size?: number }
+  file: { name: string; type: string; uri: string; size?: number },
+  replaceUploadId?: string
 ): Promise<StoredUpload> {
-  return uploadCategorizedFile(userId, "certificate", file, { relatedTable: "doctors", relatedId: userId });
+  let previousId = replaceUploadId;
+  if (!previousId) {
+    const { data: doctor, error: doctorError } = await supabase
+      .from("doctors")
+      .select("certificateUploadId")
+      .eq("userId", userId)
+      .single();
+    if (doctorError) throw doctorError;
+    previousId = doctor?.certificateUploadId ?? undefined;
+  }
+  // Older app versions could have an active certificate metadata row before the
+  // doctor pointer existed. Preserve the same replacement behavior as licenses.
+  if (!previousId) {
+    const { data: previous, error: previousError } = await supabase
+      .from("user_uploads")
+      .select("id")
+      .eq("owner_id", userId)
+      .eq("category", "certificate")
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (previousError) throw previousError;
+    previousId = previous?.id;
+  }
+  const upload = await uploadCategorizedFile(userId, "certificate", file, {
+    relatedTable: "doctors",
+    relatedId: userId,
+  });
+  const certificateFile: CertificateFileMetadata = {
+    uploadId: upload.id,
+    path: upload.storagePath,
+    name: upload.originalName,
+    type: upload.mimeType,
+  };
+  const { error } = await supabase
+    .from("doctors")
+    .update({
+      certificateUploadId: upload.id,
+      certificateFile,
+      updatedAt: new Date().toISOString(),
+    })
+    .eq("userId", userId);
+  if (error) {
+    await deleteUpload(upload.id).catch(() => {});
+    throw error;
+  }
+  if (previousId && previousId !== upload.id) {
+    try {
+      await deleteUpload(previousId);
+    } catch {
+      return { ...upload, cleanupPending: true };
+    }
+  }
+  return upload;
+}
+
+/** Returns the current provider certificate only when its upload is still active. */
+export async function getProviderCertificate(userId: string): Promise<CertificateFileMetadata | null> {
+  const { data: doctor, error: doctorError } = await supabase
+    .from("doctors")
+    .select("certificateUploadId, certificateFile")
+    .eq("userId", userId)
+    .maybeSingle();
+  if (doctorError) throw doctorError;
+  if (!doctor?.certificateUploadId) return null;
+  const { data: upload, error: uploadError } = await supabase
+    .from("user_uploads")
+    .select("id, storage_path, original_name, mime_type, status")
+    .eq("id", doctor.certificateUploadId)
+    .maybeSingle();
+  if (uploadError) throw uploadError;
+  if (!upload || upload.status !== "active") return null;
+  return {
+    uploadId: upload.id,
+    path: upload.storage_path,
+    name: upload.original_name,
+    type: upload.mime_type,
+  };
 }
 
 // ─── APPOINTMENTS ─────────────────────────────────────────────────────────────
@@ -1249,7 +1337,7 @@ export async function getInstitutionByUserId(userId: string): Promise<Institutio
     .select("*")
     .eq("userId", userId)
     .maybeSingle();
-  if (error) return null;
+  if (error) throw error;
   return data ?? null;
 }
 
@@ -1259,8 +1347,26 @@ export async function getInstitutionById(id: string): Promise<Institution | null
     .select("*")
     .eq("id", id)
     .maybeSingle();
-  if (error) return null;
+  if (error) throw error;
   return data ?? null;
+}
+
+/** Subscribe to the signed-in institute's application status changes. */
+export function subscribeToInstituteStatusChanges(
+  userId: string,
+  onStatusChange: (newStatus: string, fullRecord: Institution) => void
+) {
+  return supabase
+    .channel(uniqueTopic(`institute:status:${userId}`))
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "institute_pulse", filter: `userId=eq.${userId}` },
+      (payload) => {
+        const record = payload.new as Institution;
+        if (record?.status) onStatusChange(record.status, record);
+      }
+    )
+    .subscribe();
 }
 
 export async function getInstitutionTypes(): Promise<string[]> {
