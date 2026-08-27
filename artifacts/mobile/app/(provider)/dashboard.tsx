@@ -939,14 +939,14 @@ export default function ProviderDashboard() {
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                           Alert.alert(
-                            "Waiting for a secure invitation",
-                            "Ask the patient to start the consultation. Accept their invitation here to join its private room."
+                            "Waiting for patient",
+                            "The patient starts the appointment-bound video invitation. Accept it when it appears to join the same room.",
                           );
                         }}
                         style={({ pressed }) => [styles.actionBtn, { backgroundColor: "#315d93", flex: 1, opacity: pressed ? 0.8 : 1 }]}
                       >
                         <Feather name="video" size={14} color="#fff" />
-                        <Text style={[styles.actionBtnText, { color: "#fff" }]}>Await Video Call</Text>
+                        <Text style={[styles.actionBtnText, { color: "#fff" }]}>Await Patient Call</Text>
                       </Pressable>
                     </View>
                   )}

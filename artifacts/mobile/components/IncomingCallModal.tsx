@@ -73,6 +73,8 @@ export function IncomingCallModal({ doctorUserId, doctorName }: IncomingCallModa
         specialty: "Video Consultation",
         roomName,
         isDoctor: "true",
+        appointmentId: incomingCall.appointment_id,
+        callId: incomingCall.id,
       },
     });
   };
@@ -138,7 +140,7 @@ export function IncomingCallModal({ doctorUserId, doctorName }: IncomingCallModa
           <View style={[styles.roomBadge, { backgroundColor: colors.isDark ? "rgba(255,255,255,0.06)" : "#F4F7FB" }]}>
             <Feather name="lock" size={12} color={colors.isDark ? "#94A3B8" : "#64748B"} />
             <Text style={[styles.roomText, { color: colors.isDark ? "#94A3B8" : "#64748B" }]}>
-              Secure E2E Encrypted · {incomingCall.room_name.slice(0, 20)}...
+              Appointment-bound invitation
             </Text>
           </View>
 

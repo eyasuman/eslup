@@ -1,4 +1,4 @@
-import * as Crypto from "expo-crypto";
+import { createVideoInvitation } from "@workspace/api-client-react";
 import { supabase } from "@/lib/supabase";
 
 export interface Call {
@@ -7,34 +7,13 @@ export interface Call {
   patient_id: string;
   patient_name: string;
   room_name: string;
+  appointment_id: string;
   status: "waiting" | "accepted" | "rejected" | "ended";
   created_at: string;
 }
 
-export async function createCall(params: {
-  doctor_id: string;
-  patient_id: string;
-  patient_name: string;
-  room_name: string;
-}): Promise<Call> {
-  const { data, error } = await supabase
-    .from("calls")
-    .insert({
-      ...params,
-      status: "waiting",
-      created_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(`Unable to start the video call: ${error.message}`);
-  }
-  if (!data) {
-    throw new Error("Unable to start the video call: Supabase did not return a call record.");
-  }
-
-  return data as Call;
+export async function createCall(appointmentId: string): Promise<Call> {
+  return createVideoInvitation({ appointmentId }) as Promise<Call>;
 }
 
 export async function updateCallStatus(callId: string, status: Call["status"]) {
@@ -86,6 +65,3 @@ export function subscribeToIncomingCalls(
     .subscribe();
 }
 
-export function generateRoomName(): string {
-  return `pulse-${Crypto.randomUUID().replace(/-/g, "")}`;
-}

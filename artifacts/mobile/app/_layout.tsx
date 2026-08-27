@@ -13,12 +13,24 @@ import React, { useEffect, useState } from "react";
 import { I18nManager, Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { IncomingCallModal } from "@/components/IncomingCallModal";
 import { LanguageOnboarding } from "@/components/LanguageOnboarding";
 import { SplashAnimation } from "@/components/SplashAnimation";
 import { AppProvider, useApp, Language } from "@/context/AppContext";
+import { getCurrentSession } from "@/lib/supabase";
+
+setBaseUrl(
+  process.env.EXPO_PUBLIC_DOMAIN
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+    : null,
+);
+setAuthTokenGetter(async () => {
+  const session = await getCurrentSession().catch(() => null);
+  return session?.access_token ?? null;
+});
 
 // On web, SplashScreen is a no-op but must still be "hidden" explicitly
 if (Platform.OS !== "web") {

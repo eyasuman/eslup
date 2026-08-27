@@ -341,9 +341,8 @@ CREATE POLICY "emergency_contacts_select" ON emergency_contacts FOR SELECT USING
 CREATE POLICY "emergency_contacts_service_role" ON emergency_contacts FOR ALL USING (auth.role() = 'service_role');
 
 -- ── Video Consultation Call Signalling ────────────────────────
--- Jitsi delivers the audio/video stream. This table only stores the minimal
--- invitation state that lets the patient and provider join the same private,
--- cryptographically random room through Supabase Realtime.
+-- Calls are invitation signalling only. ZEGOCLOUD room credentials are created
+-- by the server for an eligible appointment and are never stored here.
 CREATE TABLE IF NOT EXISTS calls (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   doctor_id    TEXT NOT NULL,
@@ -354,6 +353,9 @@ CREATE TABLE IF NOT EXISTS calls (
                CHECK (status IN ('waiting', 'accepted', 'rejected', 'ended')),
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE calls ADD COLUMN IF NOT EXISTS appointment_id UUID REFERENCES appointments(id);
+CREATE INDEX IF NOT EXISTS calls_appointment_id_idx ON calls (appointment_id);
 
 CREATE INDEX IF NOT EXISTS calls_doctor_waiting_idx
   ON calls (doctor_id, created_at DESC)
@@ -382,6 +384,7 @@ BEGIN
 
   IF NEW.doctor_id IS DISTINCT FROM OLD.doctor_id
     OR NEW.patient_id IS DISTINCT FROM OLD.patient_id
+    OR NEW.appointment_id IS DISTINCT FROM OLD.appointment_id
     OR NEW.patient_name IS DISTINCT FROM OLD.patient_name
     OR NEW.room_name IS DISTINCT FROM OLD.room_name
     OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
@@ -417,12 +420,12 @@ DROP POLICY IF EXISTS calls_participant_update ON calls;
 DROP POLICY IF EXISTS calls_patient_end ON calls;
 DROP POLICY IF EXISTS calls_doctor_status_transition ON calls;
 DROP POLICY IF EXISTS calls_service_role ON calls;
+DROP POLICY IF EXISTS "patients can create calls" ON calls;
+DROP POLICY IF EXISTS "parties can update call status" ON calls;
+DROP POLICY IF EXISTS "parties can view their calls" ON calls;
 
 CREATE POLICY "calls_participant_select" ON calls
   FOR SELECT USING (auth.uid()::TEXT = patient_id::TEXT OR auth.uid()::TEXT = doctor_id::TEXT);
-
-CREATE POLICY "calls_patient_insert" ON calls
-  FOR INSERT WITH CHECK (auth.uid()::TEXT = patient_id::TEXT);
 
 CREATE POLICY "calls_patient_end" ON calls
   FOR UPDATE
@@ -436,6 +439,33 @@ CREATE POLICY "calls_doctor_status_transition" ON calls
 
 CREATE POLICY "calls_service_role" ON calls
   FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+
+-- Server-owned ZEGOCLOUD session metadata. No client can insert a room or
+-- obtain credentials from this table; participants can only read their own.
+CREATE TABLE IF NOT EXISTS video_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  appointment_id UUID NOT NULL REFERENCES appointments(id),
+  call_id UUID REFERENCES calls(id),
+  room_id TEXT NOT NULL UNIQUE CHECK (room_id ~ '^pulse-[0-9a-f]{32}$'),
+  patient_id UUID NOT NULL,
+  doctor_id UUID NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'ended')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  ended_at TIMESTAMPTZ
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS video_sessions_one_active_appointment_idx
+  ON video_sessions (appointment_id) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS video_sessions_participants_idx
+  ON video_sessions (patient_id, doctor_id);
+ALTER TABLE video_sessions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS video_sessions_participant_select ON video_sessions;
+DROP POLICY IF EXISTS video_sessions_service_role ON video_sessions;
+CREATE POLICY "video_sessions_participant_select" ON video_sessions FOR SELECT
+  USING (auth.uid() = patient_id OR auth.uid() = doctor_id);
+CREATE POLICY "video_sessions_service_role" ON video_sessions FOR ALL
+  USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
 
 DO $$
 BEGIN

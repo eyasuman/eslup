@@ -8,6 +8,19 @@ export function useRealtimeCalls(doctorUserId: string | undefined) {
 
   useEffect(() => {
     if (!doctorUserId) return;
+    let active = true;
+
+    void supabase
+      .from("calls")
+      .select("*")
+      .eq("doctor_id", doctorUserId)
+      .eq("status", "waiting")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (active && !error && data) setIncomingCall(data as Call);
+      });
 
     channelRef.current = subscribeToIncomingCalls(doctorUserId, (call) => {
       if (call.status === "waiting") {
@@ -16,6 +29,7 @@ export function useRealtimeCalls(doctorUserId: string | undefined) {
     });
 
     return () => {
+      active = false;
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;

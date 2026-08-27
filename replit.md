@@ -38,21 +38,23 @@ pnpm --filter @workspace/pulse-admin run dev     # Admin panel (port 20742)
 | `EXPO_PUBLIC_SUPABASE_URL` | Mobile + API server | Supabase project URL |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Mobile | Public anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | API server | Secret — bypasses RLS |
+| `ZEGO_APP_ID` | API server | ZEGOCLOUD numeric application ID |
+| `ZEGO_SERVER_SECRET` | API server | 32-byte ZEGOCLOUD server secret |
 | `SESSION_SECRET` | API server | Express session signing |
 
 All secrets are stored in Replit Secrets (not in `.env` files).
 
 ## Video consultations
 
-Video calls use Jitsi Meet for the audio/video room and Supabase Realtime for
-patient/provider call invitations. Every invitation generates and persists a
-unique room token; providers only join rooms from an accepted invitation.
-Before testing calls, apply
-`scripts/supabase-migration.sql` to the connected Supabase project so the
-`calls` table, its transition policies, and its Realtime publication exist.
-The mobile app asks for camera and microphone permission before it enters a
-room. For regulated deployments, use a Jitsi provider with authenticated room
-access rather than the public Jitsi service.
+Video calls use ZEGOCLOUD UIKit loaded in an Expo Go-compatible WebView/iframe.
+The API authenticates each participant with Supabase, verifies that their video
+appointment is paid and eligible, then creates a server-owned room and a
+ten-minute Token04. The ZEGOCLOUD secret remains server-only and is never
+included in a URL or mobile bundle. Call invitations are appointment-bound
+Supabase Realtime signalling; the API controls final room access and session
+ending. Apply `scripts/supabase-migration.sql` before enabling consultations.
+The app requests camera and microphone permission before joining. This design
+does not make an end-to-end encryption or medical-grade privacy claim.
 
 ## User roles
 

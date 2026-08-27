@@ -93,18 +93,11 @@ export default function ProviderDetailScreen() {
       Alert.alert("Sign in required", "Please sign in to start a video consultation.");
       return;
     }
-    if (!isAvailable) {
-      Alert.alert("Provider Unavailable", `${doctor?.name ?? "This provider"} is currently not available. Please book an appointment.`);
-      return;
-    }
-    router.push({
-      pathname: "/video-consultation",
-      params: {
-        doctorId: doctor?.userId ?? userId,
-        doctorName: doctor?.name ?? params.doctorName ?? "Provider",
-        specialty: doctor?.specialty ?? "",
-      },
-    });
+    Alert.alert(
+      "Appointment required",
+      "Video consultations can only be joined from a verified video appointment.",
+      [{ text: "Book video consultation", onPress: () => goBook("video") }, { text: "Cancel", style: "cancel" }],
+    );
   };
 
   const goToMap = () => {
