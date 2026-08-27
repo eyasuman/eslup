@@ -1478,20 +1478,20 @@ function SupabaseDoctorCard({
         },
       ]}
     >
-      <View style={[styles.docAvatarWrap, { backgroundColor: "#315d93" + "18" }]}>
-        <Feather name="user" size={26} color="#315d93" />
-        {isOnline && <View style={styles.onlineDot} />}
+      <View style={[styles.docAvatarWrap, { backgroundColor: isDark ? "rgba(147, 197, 253, 0.18)" : "rgba(49, 93, 147, 0.10)" }]}>
+        <Feather name="user" size={26} color={isDark ? "#93C5FD" : "#315D93"} />
+        {isOnline && <View style={[styles.onlineDot, { borderColor: cardBg }]} />}
       </View>
-      <View style={{ flex: 1, gap: 4, justifyContent: "space-between" }}>
+      <View style={styles.docInfo}>
         <Text style={[styles.docName, { color: textPrimary }]} numberOfLines={1} ellipsizeMode="tail">
           {doc.name}
         </Text>
-        <Text style={[styles.docSpec, { color: "#315d93" }]} numberOfLines={1} ellipsizeMode="tail">
+        <Text style={[styles.docSpec, { color: isDark ? "#BFDBFE" : "#315D93" }]} numberOfLines={1} ellipsizeMode="tail">
           {doc.specialty ?? doc.providerType ?? "Healthcare Provider"}
         </Text>
         <View style={styles.docMetaRow}>
-          <Feather name="map-pin" size={10} color={textMuted} />
-          <Text style={[styles.docMetaText, { color: textMuted }]} numberOfLines={1}>
+          <Feather name="map-pin" size={11} color={isDark ? "#CBD5E1" : textMuted} />
+          <Text style={[styles.docMetaText, { color: isDark ? "#CBD5E1" : textMuted }]} numberOfLines={1}>
             {doc.city ?? "Addis Ababa"}
             {doc.experienceYears ? ` · ${doc.experienceYears} yrs` : ""}
           </Text>
@@ -1504,14 +1504,34 @@ function SupabaseDoctorCard({
           ))}
         </View>
       </View>
-      <View style={{ alignItems: "flex-end", justifyContent: "space-between", minWidth: 72, gap: 8 }}>
+      <View style={styles.docStatusColumn}>
         {doc.consultationFee != null && (
-          <Text style={[styles.docPrice, { color: "#059669" }]}>
+          <Text
+            style={[styles.docPrice, { color: isDark ? "#6EE7B7" : "#047857" }]}
+            numberOfLines={1}
+          >
             ETB {Number(doc.consultationFee).toLocaleString()}
           </Text>
         )}
-        <View style={[styles.availBadge, { backgroundColor: isAvailable ? "#059669" + "18" : "#64748B" + "18" }]}>
-          <Text style={[styles.availText, { color: isAvailable ? "#059669" : "#64748B" }]}>
+        <View
+          style={[
+            styles.availBadge,
+            {
+              backgroundColor: isAvailable
+                ? isDark ? "rgba(16, 185, 129, 0.24)" : "#D1FAE5"
+                : isDark ? "rgba(148, 163, 184, 0.20)" : "#E2E8F0",
+              borderColor: isAvailable
+                ? isDark ? "rgba(110, 231, 183, 0.45)" : "#A7F3D0"
+                : isDark ? "rgba(203, 213, 225, 0.30)" : "#CBD5E1",
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.availText,
+              { color: isAvailable ? isDark ? "#A7F3D0" : "#047857" : isDark ? "#E2E8F0" : "#475569" },
+            ]}
+          >
             {isAvailable ? "Available" : "Busy"}
           </Text>
         </View>
@@ -1598,11 +1618,13 @@ const styles = StyleSheet.create({
     borderRadius: 10, borderWidth: 1, alignItems: "flex-start",
   },
   secNoteText: { flex: 1, fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 17 },
-  docCard: { flexDirection: "row", gap: 14, padding: 16, borderRadius: 14, borderWidth: 1, minHeight: 112, alignItems: "flex-start" },
-  docAvatarWrap: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center" },
+  docCard: { flexDirection: "row", gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, minHeight: 112, alignItems: "flex-start" },
+  docAvatarWrap: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center" },
+  docInfo: { flex: 1, minWidth: 0, gap: 4, justifyContent: "space-between" },
+  docStatusColumn: { width: 82, alignItems: "flex-end", justifyContent: "space-between", alignSelf: "stretch", gap: 8 },
   onlineDot: {
     position: "absolute", bottom: 2, right: 2, width: 12, height: 12,
-    borderRadius: 6, backgroundColor: "#059669", borderWidth: 2, borderColor: "#fff",
+    borderRadius: 6, backgroundColor: "#10B981", borderWidth: 2,
   },
   docName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   docSpec: { fontSize: 12, fontFamily: "Inter_500Medium" },
@@ -1614,7 +1636,7 @@ const styles = StyleSheet.create({
   ratingRow: { flexDirection: "row", alignItems: "center", gap: 3 },
   ratingVal: { fontSize: 12, fontFamily: "Inter_700Bold" },
   docPrice: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  availBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  availBadge: { paddingHorizontal: 7, paddingVertical: 4, borderRadius: 7, borderWidth: 1 },
   availText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
   modalOverlay: {
     position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
