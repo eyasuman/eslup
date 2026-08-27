@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Linking,
   Platform,
@@ -16,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ADDIS_HOSPITALS, Hospital } from "@/data/ethiopianHospitals";
 import { getApprovedDoctors, getInstitutionById, institutionToHospital, type SupabaseDoctor } from "@/lib/supabase";
 import { useColors } from "@/hooks/useColors";
+import { isValidLocationCoordinates } from "@/lib/mapLocations";
 
 export default function InstituteDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -98,15 +100,23 @@ export default function InstituteDetailScreen() {
   const initials = hospital.name.split(" ").slice(0, 2).map((w) => w[0]).join("");
 
   const openMap = () => {
-    const label = encodeURIComponent(hospital.name);
-    const url = Platform.select({
-      ios:     `maps:0,0?q=${label}@${hospital.lat},${hospital.lng}`,
-      android: `geo:${hospital.lat},${hospital.lng}?q=${hospital.lat},${hospital.lng}(${label})`,
-      default: `https://www.google.com/maps/search/?api=1&query=${hospital.lat},${hospital.lng}`,
+    if (!isValidLocationCoordinates(hospital.lat, hospital.lng)) {
+      Alert.alert("Location unavailable", `${hospital.name} has not added valid map coordinates yet.`);
+      return;
+    }
+    router.push({
+      pathname: "/(tabs)/healthcare" as any,
+      params: {
+        openMap: "1",
+        selectedType: "institute",
+        selectedId: hospital.id,
+        selectedName: hospital.name,
+        selectedSubtitle: hospital.type,
+        selectedCity: hospital.city,
+        selectedLat: String(hospital.lat),
+        selectedLng: String(hospital.lng),
+      },
     });
-    Linking.openURL(url!).catch(() =>
-      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${hospital.lat},${hospital.lng}`)
-    );
   };
 
   return (

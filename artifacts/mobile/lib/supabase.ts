@@ -4,6 +4,7 @@ import * as Crypto from "expo-crypto";
 import { fetch as expoFetch } from "expo/fetch";
 import { Platform } from "react-native";
 import { Hospital } from "@/data/ethiopianHospitals";
+import { isValidLocationCoordinates } from "@/lib/mapLocations";
 
 const SUPABASE_URL =
   process.env.EXPO_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
@@ -241,7 +242,15 @@ export async function upsertDoctor(doctor: {
   licenseFile?: Record<string, any> | null;
   telebirrMerchant?: string;
   cbeAccount?: string;
+  lat?: number;
+  lng?: number;
 }) {
+  if (
+    (doctor.lat != null || doctor.lng != null)
+    && !isValidLocationCoordinates(doctor.lat, doctor.lng)
+  ) {
+    throw new Error("Provider location requires a valid latitude and longitude.");
+  }
   const payload: any = {
     ...doctor,
     status: doctor.status ?? "Pending",
@@ -256,6 +265,17 @@ export async function upsertDoctor(doctor: {
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function updateDoctorLocation(userId: string, lat: number, lng: number) {
+  if (!isValidLocationCoordinates(lat, lng)) {
+    throw new Error("Provider location requires a valid latitude and longitude.");
+  }
+  const { error } = await supabase
+    .from("doctors")
+    .update({ lat, lng, updatedAt: new Date().toISOString() })
+    .eq("userId", userId);
+  if (error) throw error;
 }
 
 export async function updateProviderPaymentInfo(userId: string, info: { telebirrMerchant?: string; cbeAccount?: string }) {
@@ -1149,9 +1169,10 @@ export async function getActiveBanners(): Promise<
 
 // ─── INSTITUTIONS (Hospitals) ─────────────────────────────────────────────────
 
-/** Real columns in the Supabase `institute_pulse` table:
+/** Columns expected in the Supabase `institute_pulse` table:
  *  id, name, type, status, city, address, phone, email, licenseNo,
- *  totalDoctors, totalBeds, services, accreditations, createdAt, userId, updatedAt
+ *  totalDoctors, totalBeds, services, accreditations, createdAt, userId, updatedAt,
+ *  lat, lng
  *  Extra fields below are kept for UI convenience but are stripped before upsert.
  */
 export interface Institution {
@@ -1204,8 +1225,8 @@ export function institutionToHospital(inst: Institution): Hospital {
     distanceKm: inst.distanceKm ?? 0,
     open24h: inst.open24h ?? false,
     phone: inst.phone ?? "",
-    lat: inst.lat ?? 0,
-    lng: inst.lng ?? 0,
+    lat: inst.lat,
+    lng: inst.lng,
     categories,
     services: inst.services ?? [],
     color: inst.color ?? "#315d93",
@@ -1258,8 +1279,12 @@ export async function getInstitutionTypes(): Promise<string[]> {
 }
 
 export async function upsertInstitution(inst: Institution) {
-  // Only send columns that actually exist in institute_pulse. Unknown columns
-  // cause a Supabase schema-cache error on upsert.
+  if (
+    (inst.lat != null || inst.lng != null)
+    && !isValidLocationCoordinates(inst.lat, inst.lng)
+  ) {
+    throw new Error("Institute location requires a valid latitude and longitude.");
+  }
   const payload: Record<string, any> = {
     userId: inst.userId,
     name: inst.name,
@@ -1276,6 +1301,10 @@ export async function upsertInstitution(inst: Institution) {
   if (inst.id) payload.id = inst.id;
   if (inst.licenseNo) payload.licenseNo = inst.licenseNo;
   if (inst.licenseUploadId) payload.licenseUploadId = inst.licenseUploadId;
+  if (inst.lat != null && inst.lng != null) {
+    payload.lat = inst.lat;
+    payload.lng = inst.lng;
+  }
   const { error } = await supabase
     .from("institute_pulse")
     .upsert(payload, { onConflict: "userId" });

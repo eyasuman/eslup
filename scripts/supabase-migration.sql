@@ -122,6 +122,46 @@ ALTER TABLE IF EXISTS public.doctors
   ADD COLUMN IF NOT EXISTS "licenseUploadId" UUID REFERENCES public.user_uploads(id);
 ALTER TABLE IF EXISTS public.institute_pulse
   ADD COLUMN IF NOT EXISTS "licenseUploadId" UUID REFERENCES public.user_uploads(id);
+
+-- Provider and institute map coordinates are nullable, but must be stored as a
+-- complete, valid pair. (0,0) is rejected because legacy UI used it as a
+-- missing-location placeholder.
+ALTER TABLE IF EXISTS public.doctors
+  ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+ALTER TABLE IF EXISTS public.institute_pulse
+  ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+
+ALTER TABLE IF EXISTS public.doctors
+  DROP CONSTRAINT IF EXISTS doctors_location_pair_valid;
+ALTER TABLE IF EXISTS public.doctors
+  ADD CONSTRAINT doctors_location_pair_valid CHECK (
+    (lat IS NULL AND lng IS NULL)
+    OR (
+      lat IS NOT NULL
+      AND lng IS NOT NULL
+      AND lat BETWEEN -90 AND 90
+      AND lng BETWEEN -180 AND 180
+      AND lat <> 0
+      AND lng <> 0
+    )
+  ) NOT VALID;
+
+ALTER TABLE IF EXISTS public.institute_pulse
+  DROP CONSTRAINT IF EXISTS institute_pulse_location_pair_valid;
+ALTER TABLE IF EXISTS public.institute_pulse
+  ADD CONSTRAINT institute_pulse_location_pair_valid CHECK (
+    (lat IS NULL AND lng IS NULL)
+    OR (
+      lat IS NOT NULL
+      AND lng IS NOT NULL
+      AND lat BETWEEN -90 AND 90
+      AND lng BETWEEN -180 AND 180
+      AND lat <> 0
+      AND lng <> 0
+    )
+  ) NOT VALID;
 ALTER TABLE IF EXISTS public.appointments
   ADD COLUMN IF NOT EXISTS "paymentProofUploadId" UUID REFERENCES public.user_uploads(id);
 CREATE OR REPLACE FUNCTION public.enforce_user_upload_update()

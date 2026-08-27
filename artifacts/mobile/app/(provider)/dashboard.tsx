@@ -32,6 +32,7 @@ import {
   updateProviderAvailability,
   updateDoctorConsultationFee,
   updateDoctorHospital,
+  updateDoctorLocation,
   signOut as supabaseSignOut,
   uploadProfileImage,
   uploadCertificate,
@@ -289,11 +290,15 @@ export default function ProviderDashboard() {
         return;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      if (!user?.id) {
+        throw new Error("Sign in is required to save a provider location.");
+      }
+      await updateDoctorLocation(user.id, loc.coords.latitude, loc.coords.longitude);
       setGpsLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Location Updated", `Your clinic location has been set.\nLat: ${loc.coords.latitude.toFixed(5)}\nLng: ${loc.coords.longitude.toFixed(5)}\n\nPatients within your service range can now find you.`);
-    } catch {
-      Alert.alert("Error", "Could not fetch location. Please check your device settings and try again.");
+    } catch (error: any) {
+      Alert.alert("Location Update Failed", error?.message ?? "Could not save the clinic location. Please check your device settings and try again.");
     }
     setLocationLoading(false);
   };

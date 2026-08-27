@@ -26,13 +26,21 @@ import {
   getBookingsForClient,
   subscribeToClientBookings,
   getApprovedDoctors,
+  getInstitutions,
   subscribeToProviders,
   unsubscribeChannel,
+  type Institution,
   type SupabaseDoctor,
 } from "@/lib/supabase";
 import { useColors } from "@/hooks/useColors";
 import NearbyMap from "@/components/NearbyMap";
 import { useTranslation } from "@/constants/translations";
+import {
+  getMapLocationKey,
+  isValidLocationCoordinates,
+  type MapLocation,
+  type MapLocationKind,
+} from "@/lib/mapLocations";
 
 type ProvTab = "nearby" | "appointments" | "teleradiology";
 type FilterType = "all" | "doctor" | "nurse" | "available" | "online" | "homecare";
@@ -108,7 +116,25 @@ export default function HealthcareScreen() {
   const t = useTranslation(language);
   const isRTL = language === "ar";
 
-  const { openMap } = useLocalSearchParams<{ openMap?: string }>();
+  const {
+    openMap,
+    selectedType,
+    selectedId,
+    selectedName,
+    selectedSubtitle,
+    selectedCity,
+    selectedLat,
+    selectedLng,
+  } = useLocalSearchParams<{
+    openMap?: string;
+    selectedType?: MapLocationKind;
+    selectedId?: string;
+    selectedName?: string;
+    selectedSubtitle?: string;
+    selectedCity?: string;
+    selectedLat?: string;
+    selectedLng?: string;
+  }>();
 
   const [provTab, setProvTab] = useState<ProvTab>("nearby");
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
@@ -117,15 +143,16 @@ export default function HealthcareScreen() {
 
   // When navigated here via "Find Nearby" button, jump straight to map view
   useEffect(() => {
-    if (openMap === "1") {
+    if (openMap === "1" || selectedId) {
       setProvTab("nearby");
       setViewMode("map");
     }
-  }, [openMap]);
+  }, [openMap, selectedId]);
 
   // ── Supabase doctors state ─────────────────────────────────────────────────
   const [supabaseDoctors, setSupabaseDoctors] = useState<SupabaseDoctor[]>([]);
   const [doctorsLoading, setDoctorsLoading] = useState(true);
+  const [institutions, setInstitutions] = useState<Institution[]>([]);
 
   // ── Supabase appointments state ────────────────────────────────────────────
   const [liveBookings, setLiveBookings] = useState<any[]>([]);
@@ -196,6 +223,12 @@ export default function HealthcareScreen() {
     return () => { unsubscribeChannel(channel); };
   }, []);
 
+  useEffect(() => {
+    getInstitutions()
+      .then(setInstitutions)
+      .catch(() => setInstitutions([]));
+  }, []);
+
   // ── Fetch appointments from Supabase + realtime ────────────────────────────
   useEffect(() => {
     if (!user?.id) return;
@@ -263,6 +296,66 @@ export default function HealthcareScreen() {
 
     return list;
   }, [supabaseDoctors, activeFilter, searchQuery]);
+
+  const selectedRouteLocation = useMemo<MapLocation | null>(() => {
+    if (!selectedType || !selectedId) return null;
+    const lat = selectedLat == null ? undefined : Number(selectedLat);
+    const lng = selectedLng == null ? undefined : Number(selectedLng);
+    return {
+      id: selectedId,
+      kind: selectedType,
+      name: selectedName ?? (selectedType === "institute" ? "Health Institute" : "Healthcare Provider"),
+      subtitle: selectedSubtitle,
+      city: selectedCity,
+      lat: Number.isFinite(lat) ? lat : undefined,
+      lng: Number.isFinite(lng) ? lng : undefined,
+    };
+  }, [selectedType, selectedId, selectedName, selectedSubtitle, selectedCity, selectedLat, selectedLng]);
+
+  const mapLocations = useMemo<MapLocation[]>(() => {
+    const locations: MapLocation[] = [
+      ...filteredDocs
+        .filter((doctor) => Boolean(doctor.userId ?? doctor.id))
+        .map((doctor) => ({
+          id: doctor.userId ?? doctor.id!,
+          kind: "provider" as const,
+          name: doctor.name,
+          subtitle: doctor.specialty ?? doctor.providerType ?? "Healthcare Provider",
+          city: doctor.city,
+          lat: doctor.lat,
+          lng: doctor.lng,
+          serviceModes: doctor.serviceModes,
+          availability: doctor.availability,
+        })),
+      ...institutions
+        .filter((institution) => Boolean(institution.id ?? institution.userId))
+        .map((institution) => ({
+          id: institution.id ?? institution.userId!,
+          kind: "institute" as const,
+          name: institution.name,
+          subtitle: institution.type ?? "Health Institute",
+          city: institution.city,
+          lat: institution.lat,
+          lng: institution.lng,
+          rating: institution.rating,
+        })),
+    ];
+
+    if (selectedRouteLocation) {
+      const selectedKey = getMapLocationKey(selectedRouteLocation);
+      const existingIndex = locations.findIndex((location) => getMapLocationKey(location) === selectedKey);
+      const existing = existingIndex >= 0 ? locations[existingIndex] : null;
+      if (!existing) {
+        locations.push(selectedRouteLocation);
+      } else if (
+        !isValidLocationCoordinates(existing.lat, existing.lng)
+        && isValidLocationCoordinates(selectedRouteLocation.lat, selectedRouteLocation.lng)
+      ) {
+        locations[existingIndex] = { ...existing, ...selectedRouteLocation };
+      }
+    }
+    return locations;
+  }, [filteredDocs, institutions, selectedRouteLocation]);
 
   // ── Filter counts for badges ───────────────────────────────────────────────
   const filterCounts = useMemo(() => ({
@@ -565,7 +658,8 @@ export default function HealthcareScreen() {
           {viewMode === "map" ? (
             <View style={{ flex: 1 }}>
               <NearbyMap
-                docs={filteredDocs as any}
+                locations={mapLocations}
+                selectedLocationKey={selectedRouteLocation ? getMapLocationKey(selectedRouteLocation) : undefined}
                 isDark={isDark}
                 textPrimary={textPrimary}
                 textMuted={textMuted}

@@ -29,6 +29,7 @@ import { getInstitutionTypes, getInstitutions, institutionToHospital } from "@/l
 import { useColors } from "@/hooks/useColors";
 import { useTranslation } from "@/constants/translations";
 import { getActiveBanners } from "@/lib/supabase";
+import { isValidLocationCoordinates } from "@/lib/mapLocations";
 
 const PULSE_LOGO   = require("../../assets/images/pulse-logo.jpg");
 const PULSE_BANNER = require("../../assets/images/pulse-hd-banner.png");
@@ -515,17 +516,23 @@ function HospitalCard({ hospital, isDark, textPrimary, textMuted, cardBg, border
           </Pressable>
           <Pressable
             onPress={() => {
-              const label = encodeURIComponent(hospital.name);
-              const url = Platform.select({
-                ios: `maps:0,0?q=${label}@${hospital.lat},${hospital.lng}`,
-                android: `geo:${hospital.lat},${hospital.lng}?q=${hospital.lat},${hospital.lng}(${label})`,
-                default: `https://www.google.com/maps/search/?api=1&query=${hospital.lat},${hospital.lng}`,
+              if (!isValidLocationCoordinates(hospital.lat, hospital.lng)) {
+                Alert.alert("Location unavailable", `${hospital.name} has not added valid map coordinates yet.`);
+                return;
+              }
+              router.push({
+                pathname: "/(tabs)/healthcare" as any,
+                params: {
+                  openMap: "1",
+                  selectedType: "institute",
+                  selectedId: hospital.id,
+                  selectedName: hospital.name,
+                  selectedSubtitle: hospital.type,
+                  selectedCity: hospital.city,
+                  selectedLat: String(hospital.lat),
+                  selectedLng: String(hospital.lng),
+                },
               });
-              Linking.openURL(url!).catch(() =>
-                Linking.openURL(
-                  `https://www.google.com/maps/search/?api=1&query=${hospital.lat},${hospital.lng}`
-                )
-              );
             }}
             style={({ pressed }) => [styles.hospBtn, { backgroundColor: "#202937", opacity: pressed ? 0.85 : 1 }]}
           >

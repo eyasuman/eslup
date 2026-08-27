@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getDoctorByUserId } from "@/lib/supabase";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import NearbyMap from "@/components/NearbyMap";
+import { isValidLocationCoordinates } from "@/lib/mapLocations";
 
 export default function ProviderDetailScreen() {
   const params = useLocalSearchParams<{
@@ -103,6 +103,26 @@ export default function ProviderDetailScreen() {
         doctorId: doctor?.userId ?? userId,
         doctorName: doctor?.name ?? params.doctorName ?? "Provider",
         specialty: doctor?.specialty ?? "",
+      },
+    });
+  };
+
+  const goToMap = () => {
+    if (!isValidLocationCoordinates(doctor?.lat, doctor?.lng)) {
+      Alert.alert("Location unavailable", `${doctor?.name ?? "This provider"} has not added valid map coordinates yet.`);
+      return;
+    }
+    router.push({
+      pathname: "/(tabs)/healthcare" as any,
+      params: {
+        openMap: "1",
+        selectedType: "provider",
+        selectedId: doctor.userId ?? userId,
+        selectedName: doctor.name ?? params.doctorName ?? "Healthcare Provider",
+        selectedSubtitle: doctor.specialty ?? doctor.providerType ?? "Healthcare Provider",
+        selectedCity: doctor.city ?? "",
+        selectedLat: String(doctor.lat),
+        selectedLng: String(doctor.lng),
       },
     });
   };
@@ -340,23 +360,28 @@ export default function ProviderDetailScreen() {
         )}
 
         {activeTab === "location" && doctor && (
-          <View style={{ flex: 1, minHeight: 360, borderRadius: 14, overflow: "hidden" }}>
-            <NearbyMap
-              docs={[{
-                id: doctor.id,
-                userId: doctor.userId,
-                name: doctor.name ?? params.doctorName ?? "Provider",
-                specialty: doctor.specialty ?? doctor.providerType ?? "Healthcare Provider",
-                city: doctor.city ?? "Addis Ababa",
-                serviceModes: doctor.serviceModes,
-                availability: doctor.availability,
-              }]}
-              isDark={colors.isDark}
-              textPrimary={textPrimary}
-              textMuted={textMuted}
-              cardBg={cardBg}
-              cardBorder={borderCol}
-            />
+          <View style={[styles.locationCard, { backgroundColor: cardBg, borderColor: borderCol }]}>
+            <View style={[styles.locationIcon, { backgroundColor: isValidLocationCoordinates(doctor.lat, doctor.lng) ? "#315d9320" : "#64748B20" }]}>
+              <Feather
+                name={isValidLocationCoordinates(doctor.lat, doctor.lng) ? "map-pin" : "map"}
+                size={30}
+                color={isValidLocationCoordinates(doctor.lat, doctor.lng) ? "#315d93" : textMuted}
+              />
+            </View>
+            <Text style={[styles.locationTitle, { color: textPrimary }]}>
+              {isValidLocationCoordinates(doctor.lat, doctor.lng) ? doctor.city ?? "Provider location" : "Location unavailable"}
+            </Text>
+            <Text style={[styles.locationText, { color: textMuted }]}>
+              {isValidLocationCoordinates(doctor.lat, doctor.lng)
+                ? "Open the Pulse map to view this provider's exact clinic location."
+                : "This provider has not added valid map coordinates yet."}
+            </Text>
+            {isValidLocationCoordinates(doctor.lat, doctor.lng) && (
+              <Pressable onPress={goToMap} style={styles.openMapBtn}>
+                <Feather name="map" size={16} color="#fff" />
+                <Text style={styles.openMapText}>View in Pulse Map</Text>
+              </Pressable>
+            )}
           </View>
         )}
       </ScrollView>
@@ -428,4 +453,10 @@ const styles = StyleSheet.create({
   bookBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
   videoBtn: { flex: 1, backgroundColor: "transparent", borderRadius: 14, padding: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1.5 },
   videoBtnText: { color: "#315d93", fontSize: 14, fontFamily: "Inter_700Bold" },
+  locationCard: { minHeight: 280, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center", padding: 28 },
+  locationIcon: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  locationTitle: { fontSize: 18, fontFamily: "Inter_700Bold", marginTop: 16, textAlign: "center" },
+  locationText: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20, textAlign: "center", marginTop: 6 },
+  openMapBtn: { marginTop: 20, backgroundColor: "#315d93", borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 8 },
+  openMapText: { color: "#fff", fontSize: 13, fontFamily: "Inter_700Bold" },
 });

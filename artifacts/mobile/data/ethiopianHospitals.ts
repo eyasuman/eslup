@@ -9,8 +9,8 @@ export interface Hospital {
   distanceKm: number;
   open24h: boolean;
   phone: string;
-  lat: number;
-  lng: number;
+  lat?: number;
+  lng?: number;
   categories: ("hospital" | "clinic" | "pharmacy" | "emergency")[];
   services: string[];
   color: string;
