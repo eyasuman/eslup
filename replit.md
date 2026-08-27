@@ -42,6 +42,14 @@ pnpm --filter @workspace/pulse-admin run dev     # Admin panel (port 20742)
 
 All secrets are stored in Replit Secrets (not in `.env` files).
 
+## Video consultations
+
+Video calls use Jitsi Meet for the encrypted audio/video room and Supabase
+Realtime for patient/provider call invitations. Before testing calls, apply
+`scripts/supabase-migration.sql` to the connected Supabase project so the
+`calls` table, its access policies, and its Realtime publication exist. The
+mobile app asks for camera and microphone permission before it enters a room.
+
 ## User roles
 
 The app currently supports two account types:

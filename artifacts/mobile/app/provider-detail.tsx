@@ -23,6 +23,7 @@ export default function ProviderDetailScreen() {
     doctorId?: string;
     id?: string;
     doctorName?: string;
+    initialTab?: "about" | "services" | "location";
   }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();

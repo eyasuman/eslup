@@ -9,8 +9,13 @@ import {
   View,
 } from "react-native";
 import { ServiceType } from "@/context/AppContext";
-import { SERVICE_TYPES } from "@/data/mockProviders";
 import { useColors } from "@/hooks/useColors";
+
+const SERVICE_TYPES: { id: ServiceType; label: string; icon: React.ComponentProps<typeof Feather>["name"] }[] = [
+  { id: "onsite", label: "In person", icon: "map-pin" },
+  { id: "online", label: "Online", icon: "video" },
+  { id: "homecare", label: "Home care", icon: "home" },
+];
 
 interface ServiceTypeSelectorProps {
   selected: ServiceType | null;

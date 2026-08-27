@@ -42,6 +42,73 @@ ALTER TABLE emergency_contacts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "emergency_contacts_select" ON emergency_contacts FOR SELECT USING (true);
 CREATE POLICY "emergency_contacts_service_role" ON emergency_contacts FOR ALL USING (auth.role() = 'service_role');
 
+-- ── Video Consultation Call Signalling ────────────────────────
+-- Jitsi delivers the encrypted audio/video stream. This table only stores the
+-- minimal call invitation state that lets the patient and provider join the
+-- same room through Supabase Realtime.
+CREATE TABLE IF NOT EXISTS calls (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  doctor_id    TEXT NOT NULL,
+  patient_id   TEXT NOT NULL,
+  patient_name TEXT NOT NULL,
+  room_name    TEXT NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'waiting'
+               CHECK (status IN ('waiting', 'accepted', 'rejected', 'ended')),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS calls_doctor_waiting_idx
+  ON calls (doctor_id, created_at DESC)
+  WHERE status = 'waiting';
+
+ALTER TABLE calls ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'calls' AND policyname = 'calls_participant_select'
+  ) THEN
+    CREATE POLICY "calls_participant_select" ON calls
+      FOR SELECT USING (auth.uid()::TEXT = patient_id OR auth.uid()::TEXT = doctor_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'calls' AND policyname = 'calls_patient_insert'
+  ) THEN
+    CREATE POLICY "calls_patient_insert" ON calls
+      FOR INSERT WITH CHECK (auth.uid()::TEXT = patient_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'calls' AND policyname = 'calls_participant_update'
+  ) THEN
+    CREATE POLICY "calls_participant_update" ON calls
+      FOR UPDATE USING (auth.uid()::TEXT = patient_id OR auth.uid()::TEXT = doctor_id)
+      WITH CHECK (auth.uid()::TEXT = patient_id OR auth.uid()::TEXT = doctor_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'calls' AND policyname = 'calls_service_role'
+  ) THEN
+    CREATE POLICY "calls_service_role" ON calls
+      FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication_rel pr
+    JOIN pg_publication p ON p.oid = pr.prpubid
+    JOIN pg_class c ON c.oid = pr.prrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE p.pubname = 'supabase_realtime' AND n.nspname = 'public' AND c.relname = 'calls'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.calls;
+  END IF;
+END $$;
+
 -- ── Seed: Institutions ───────────────────────────────────────
 INSERT INTO institutions (id, name, type, address, district, city, rating, "distanceKm", "open24h", phone, lat, lng, categories, services, color) VALUES
 ('h1','Black Lion Hospital (Tikur Anbessa)','Government','Lideta Sub-City, Semen Mazoria','Lideta','Addis Ababa',4.2,1.4,true,'+251115511211',9.0201,38.7525,ARRAY['hospital','emergency'],ARRAY['Emergency','Surgery','Oncology','Cardiology','Neurology'],'#315d93'),

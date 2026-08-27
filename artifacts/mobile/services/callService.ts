@@ -16,38 +16,34 @@ export async function createCall(params: {
   patient_name: string;
   room_name: string;
 }): Promise<Call> {
-  try {
-    const { data, error } = await supabase
-      .from("calls")
-      .insert({
-        ...params,
-        status: "waiting",
-        created_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-    if (error) throw error;
-    return data as Call;
-  } catch {
-    // If table doesn't exist yet, return a mock call so UI still works
-    return {
-      id: Date.now().toString() + Math.random().toString(36).slice(2, 7),
+  const { data, error } = await supabase
+    .from("calls")
+    .insert({
       ...params,
       status: "waiting",
       created_at: new Date().toISOString(),
-    };
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Unable to start the video call: ${error.message}`);
   }
+  if (!data) {
+    throw new Error("Unable to start the video call: Supabase did not return a call record.");
+  }
+
+  return data as Call;
 }
 
 export async function updateCallStatus(callId: string, status: Call["status"]) {
-  try {
-    const { error } = await supabase
-      .from("calls")
-      .update({ status })
-      .eq("id", callId);
-    if (error) throw error;
-  } catch {
-    // Silently fail if table not set up
+  const { error } = await supabase
+    .from("calls")
+    .update({ status })
+    .eq("id", callId);
+
+  if (error) {
+    throw new Error(`Unable to update the video call: ${error.message}`);
   }
 }
 

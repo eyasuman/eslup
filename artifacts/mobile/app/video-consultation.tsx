@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { CameraView, useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
@@ -6,6 +7,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -57,10 +59,34 @@ export default function VideoConsultationScreen() {
   const [waitingForAccept, setWaitingForAccept] = useState(false);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
-  const [mediaReady, setMediaReady] = useState(false);
+  const [callError, setCallError] = useState<string | null>(null);
   const [isVerifyingStatus, setIsVerifyingStatus] = useState(!!appointmentId);
   const [appointmentData, setAppointmentData] = useState<any>(null);
   const [lockStatus, setLockStatus] = useState<'locked' | 'unlocked' | 'verifying'>('verifying');
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
+  const mediaPermissionsGranted = Boolean(cameraPermission?.granted && microphonePermission?.granted);
+  const mediaPermissionsBlocked = Boolean(
+    !mediaPermissionsGranted &&
+      (cameraPermission?.canAskAgain === false || microphonePermission?.canAskAgain === false)
+  );
+
+  const requestMediaAccess = async () => {
+    const [camera, microphone] = await Promise.all([
+      cameraPermission?.granted ? Promise.resolve(cameraPermission) : requestCameraPermission(),
+      microphonePermission?.granted ? Promise.resolve(microphonePermission) : requestMicrophonePermission(),
+    ]);
+    return Boolean(camera?.granted && microphone?.granted);
+  };
+
+  const openDeviceSettings = async () => {
+    if (Platform.OS === "web") return;
+    try {
+      await Linking.openSettings();
+    } catch {
+      Alert.alert("Unable to open settings", "Please enable camera and microphone access in your device settings.");
+    }
+  };
 
   useEffect(() => {
     if (!appointmentId) {
@@ -174,8 +200,13 @@ export default function VideoConsultationScreen() {
             );
           }
         });
-      } catch {
-        // Fallback: simulate connection if Supabase table not set up
+      } catch (error) {
+        setWaitingForAccept(false);
+        setCallError(
+          error instanceof Error
+            ? error.message
+            : "Unable to notify the provider. Please try again."
+        );
       }
     };
 
@@ -223,7 +254,7 @@ export default function VideoConsultationScreen() {
 
   const jitsiUrl = `https://meet.jit.si/${roomName}#userInfo.displayName="${encodeURIComponent(
     isDoctorJoining ? displayName : user?.name ?? "Patient"
-  )}"&config.startWithVideoMuted=false&config.startWithAudioMuted=false&config.prejoinPageEnabled=false&config.disableDeepLinking=true&interfaceConfig.SHOW_JITSI_WATERMARK=false&interfaceConfig.MOBILE_APP_PROMO=false`;
+  )}"&config.startWithVideoMuted=${String(!isCameraOn)}&config.startWithAudioMuted=${String(!isMicOn)}&config.prejoinPageEnabled=false&config.disableDeepLinking=true&interfaceConfig.SHOW_JITSI_WATERMARK=false&interfaceConfig.MOBILE_APP_PROMO=false`;
 
   /* ─── LOCKED STATE (Wait for Payment Verification) ─── */
   if (lockStatus === 'verifying') {
@@ -405,11 +436,15 @@ export default function VideoConsultationScreen() {
           </View>
 
           <View style={styles.previewContainer}>
-            {isCameraOn ? (
+            {isCameraOn && mediaPermissionsGranted && Platform.OS !== "web" ? (
+               <CameraView style={styles.cameraPreview} facing="front" />
+            ) : isCameraOn ? (
                <View style={styles.previewInner}>
                  <Feather name="user" size={80} color="rgba(255,255,255,0.2)" />
                  <View style={styles.previewOverlay}>
-                    <Text style={styles.previewText}>Camera Preview Active</Text>
+                     <Text style={styles.previewText}>
+                       {mediaPermissionsGranted ? "Camera Preview Active" : "Camera access is required"}
+                     </Text>
                  </View>
                </View>
             ) : (
@@ -437,24 +472,49 @@ export default function VideoConsultationScreen() {
 
           <View style={styles.checkCard}>
              <View style={styles.checkItem}>
-                <View style={[styles.checkCircle, { backgroundColor: isCameraOn ? '#05966930' : 'rgba(255,255,255,0.1)' }]}>
-                   <Feather name={isCameraOn ? "check" : "camera"} size={14} color={isCameraOn ? "#059669" : "#fff"} />
+                 <View style={[styles.checkCircle, { backgroundColor: cameraPermission?.granted ? '#05966930' : 'rgba(255,255,255,0.1)' }]}>
+                    <Feather name={cameraPermission?.granted ? "check" : "camera"} size={14} color={cameraPermission?.granted ? "#059669" : "#fff"} />
                 </View>
-                <Text style={styles.checkText}>Camera Permissions Granted</Text>
+                 <Text style={styles.checkText}>
+                   {cameraPermission?.granted ? "Camera permission granted" : "Camera permission required"}
+                 </Text>
              </View>
              <View style={styles.checkItem}>
-                <View style={[styles.checkCircle, { backgroundColor: isMicOn ? '#05966930' : 'rgba(255,255,255,0.1)' }]}>
-                   <Feather name={isMicOn ? "check" : "mic"} size={14} color={isMicOn ? "#059669" : "#fff"} />
+                 <View style={[styles.checkCircle, { backgroundColor: microphonePermission?.granted ? '#05966930' : 'rgba(255,255,255,0.1)' }]}>
+                    <Feather name={microphonePermission?.granted ? "check" : "mic"} size={14} color={microphonePermission?.granted ? "#059669" : "#fff"} />
                 </View>
-                <Text style={styles.checkText}>Microphone Permissions Granted</Text>
+                 <Text style={styles.checkText}>
+                   {microphonePermission?.granted ? "Microphone permission granted" : "Microphone permission required"}
+                 </Text>
              </View>
           </View>
 
           <View style={{ flex: 1 }} />
 
+          {!mediaPermissionsGranted && (
+            <Pressable
+              onPress={mediaPermissionsBlocked ? openDeviceSettings : requestMediaAccess}
+              style={[styles.permissionBtn, { marginBottom: 12 }]}
+            >
+              <Feather name={mediaPermissionsBlocked ? "settings" : "shield"} size={16} color="#fff" />
+              <Text style={styles.permissionBtnText}>
+                {mediaPermissionsBlocked ? "Open Device Settings" : "Allow Camera & Microphone"}
+              </Text>
+            </Pressable>
+          )}
+
           <Pressable
-            onPress={() => {
+            onPress={async () => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              const hasPermission = mediaPermissionsGranted || await requestMediaAccess();
+              if (!hasPermission) {
+                Alert.alert(
+                  "Camera and microphone required",
+                  "Allow camera and microphone access to join a video consultation."
+                );
+                return;
+              }
+              setCallError(null);
               setPhase("waiting");
             }}
             style={styles.continueBtn}
@@ -509,52 +569,64 @@ export default function VideoConsultationScreen() {
           </View>
 
           <View style={styles.connectionCard}>
-            <Text style={styles.connectionTitle}>Preparing your secure session…</Text>
-            {steps.map((step) => (
-              <View key={step.label} style={styles.checkRow}>
-                <View
-                  style={[
-                    styles.checkIcon,
-                    { backgroundColor: step.done ? "#05966930" : "rgba(255,255,255,0.08)" },
-                  ]}
-                >
-                  <Feather
-                    name={step.done ? "check" : "circle"}
-                    size={13}
-                    color={step.done ? "#059669" : "rgba(255,255,255,0.3)"}
+            {callError ? (
+              <View style={styles.callErrorCard}>
+                <Feather name="alert-triangle" size={18} color="#FCA5A5" />
+                <Text style={styles.callErrorText}>{callError}</Text>
+                <Pressable onPress={() => setPhase("mediacheck")} style={styles.retryBtn}>
+                  <Text style={styles.retryBtnText}>Try again</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.connectionTitle}>Preparing your secure session…</Text>
+                {steps.map((step) => (
+                  <View key={step.label} style={styles.checkRow}>
+                    <View
+                      style={[
+                        styles.checkIcon,
+                        { backgroundColor: step.done ? "#05966930" : "rgba(255,255,255,0.08)" },
+                      ]}
+                    >
+                      <Feather
+                        name={step.done ? "check" : "circle"}
+                        size={13}
+                        color={step.done ? "#059669" : "rgba(255,255,255,0.3)"}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.checkLabel,
+                        { color: step.done ? "#fff" : "rgba(255,255,255,0.4)" },
+                      ]}
+                    >
+                      {step.label}
+                    </Text>
+                    {step.done && (
+                      <Feather
+                        name="check-circle"
+                        size={15}
+                        color="#059669"
+                        style={{ marginLeft: "auto" }}
+                      />
+                    )}
+                  </View>
+                ))}
+                <View style={styles.progressBar}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${Math.round(connectionProgress)}%` as any },
+                    ]}
                   />
                 </View>
-                <Text
-                  style={[
-                    styles.checkLabel,
-                    { color: step.done ? "#fff" : "rgba(255,255,255,0.4)" },
-                  ]}
-                >
-                  {step.label}
+                <Text style={styles.progressText}>
+                  {connectionProgress >= 85
+                    ? "Waiting for doctor to join…"
+                    : `${Math.round(connectionProgress)}% ready`}
                 </Text>
-                {step.done && (
-                  <Feather
-                    name="check-circle"
-                    size={15}
-                    color="#059669"
-                    style={{ marginLeft: "auto" }}
-                  />
-                )}
-              </View>
-            ))}
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${Math.round(connectionProgress)}%` as any },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>
-              {connectionProgress >= 85
-                ? "Waiting for doctor to join…"
-                : `${Math.round(connectionProgress)}% ready`}
-            </Text>
+              </>
+            )}
           </View>
 
           <View style={styles.qualityRow}>
@@ -566,17 +638,13 @@ export default function VideoConsultationScreen() {
             <View style={[styles.qualityPip, { backgroundColor: "#059669" }]} />
           </View>
 
-          {waitingForAccept && (
+          {waitingForAccept && !callError && (
             <Pressable
-              onPress={() => {
-                setConnectionProgress(100);
-                setWaitingForAccept(false);
-                setTimeout(() => setPhase("call"), 400);
-              }}
+              onPress={() => setPhase("mediacheck")}
               style={{ marginTop: 16, alignItems: "center" }}
             >
               <Text style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, fontFamily: "Inter_400Regular" }}>
-                Doctor taking too long? Join anyway
+                Need to change your camera or microphone settings?
               </Text>
             </Pressable>
           )}
@@ -868,6 +936,18 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   continueBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" },
+  permissionBtn: {
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: "rgba(127,168,216,0.22)",
+    borderWidth: 1,
+    borderColor: "rgba(127,168,216,0.5)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  permissionBtnText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   waitingCard: {
     backgroundColor: "rgba(255,255,255,0.06)",
     borderRadius: 20,
@@ -915,6 +995,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_500Medium",
   },
+  callErrorCard: {
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+  },
+  callErrorText: {
+    color: "#FECACA",
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 19,
+  },
+  retryBtn: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  retryBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
   checkRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   checkIcon: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
   checkLabel: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 },
@@ -1018,6 +1117,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#1F2937",
+  },
+  cameraPreview: {
+    flex: 1,
   },
   previewOverlay: {
     position: "absolute",
