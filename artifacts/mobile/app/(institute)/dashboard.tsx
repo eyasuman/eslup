@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl, Platform, ActivityIndicator, TextInput, KeyboardAvoidingView, Alert } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -7,7 +7,12 @@ import * as Haptics from "expo-haptics";
 
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import { getInstitutionByUserId, upsertInstitution } from "@/lib/supabase";
+import {
+  getInstitutionByUserId,
+  subscribeToInstituteStatusChanges,
+  unsubscribeChannel,
+  upsertInstitution,
+} from "@/lib/supabase";
 
 const INSTITUTE_CATEGORIES = [
   "Hospital", "Clinic", "Laboratory", "Pharmacy", "Imaging", 
@@ -71,7 +76,7 @@ export default function InstituteDashboardScreen() {
       const data = await getInstitutionByUserId(user.id);
       if (data) {
         if (data.status !== "Active") {
-          router.replace("/(institute)/status");
+          router.replace("/(institute)/institute-status");
           return;
         }
         setInstitutionId(data.id || "");
@@ -110,6 +115,16 @@ export default function InstituteDashboardScreen() {
       fetchData();
     }, [user?.id])
   );
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = subscribeToInstituteStatusChanges(user.id, (status) => {
+      if (status !== "Active") {
+        router.replace("/(institute)/institute-status");
+      }
+    });
+    return () => unsubscribeChannel(channel);
+  }, [user?.id]);
   
   const handleSave = async () => {
     if (!user?.id) return;
@@ -136,7 +151,7 @@ export default function InstituteDashboardScreen() {
       
       const currentData = await getInstitutionByUserId(user.id);
       if (!currentData || currentData.status !== "Active") {
-        router.replace("/(institute)/status");
+        router.replace("/(institute)/institute-status");
         return;
       }
       

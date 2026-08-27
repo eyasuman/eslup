@@ -177,8 +177,8 @@ export default function YouScreen() {
       await setUserRole(resolvedRole);
 
       if (resolvedRole === "institute") {
-        if (instituteStatus === "Active") router.replace("/(institute)/dashboard");
-        else router.replace("/(institute)/status");
+        if (instituteStatus === "Active") router.replace("/(institute)/institute-dashboard");
+        else router.replace("/(institute)/institute-status");
       } else {
         setAuthMode("select");
       }
@@ -189,7 +189,7 @@ export default function YouScreen() {
 
   const handleRegister = async (role: UserRole) => {
     if (role === "provider") {
-      router.push("/(provider)/register");
+      router.push("/(provider)/provider-register");
       return;
     }
 
@@ -251,20 +251,20 @@ export default function YouScreen() {
             icon: "home",
             label: "Institute Dashboard",
             onPress: () => {
-              if (user?.instituteStatus === "Active") router.push("/(institute)/dashboard");
-              else router.push("/(institute)/status");
+              if (user?.instituteStatus === "Active") router.push("/(institute)/institute-dashboard");
+              else router.push("/(institute)/institute-status");
             }
           }]
         : userRole === "client"
         ? [
             { icon: "calendar", label: t("my_appointments"), onPress: () => router.push("/appointments") },
             { icon: "heart", label: t("edd_calculator"), onPress: () => router.push("/edd-calculator") },
-            { icon: "activity", label: t("become_provider"), onPress: () => router.push("/(provider)/register") },
+            { icon: "activity", label: t("become_provider"), onPress: () => router.push("/(provider)/provider-register") },
           ]
         : [
             { icon: "calendar", label: t("my_appointments"), onPress: () => router.push("/appointments") },
             { icon: "heart", label: t("edd_calculator"), onPress: () => router.push("/edd-calculator") },
-            { icon: "grid", label: t("provider_dashboard"), onPress: () => router.push("/(provider)/dashboard") },
+            { icon: "grid", label: t("provider_dashboard"), onPress: () => router.push("/(provider)/provider-dashboard") },
           ]),
     ];
 
@@ -543,7 +543,7 @@ export default function YouScreen() {
 
             {/* For institutes: register directs to full registration screen */}
             {isInstitute && isLogin && (
-              <Pressable onPress={() => router.push("/(institute)/register")} style={styles.switchLink}>
+              <Pressable onPress={() => router.push("/(institute)/institute-register")} style={styles.switchLink}>
                 <Text style={[styles.switchText, { color: textMuted }]}>
                   {t("dont_have_account") + " "}
                   <Text style={{ color: "#0D9488", fontFamily: "Inter_600SemiBold" }}>{t("register")}</Text>
@@ -623,7 +623,7 @@ export default function YouScreen() {
               <Pressable onPress={() => { setAuthMode("provider-login"); setForm({ name: "", email: "", phone: "", password: "" }); setEmailError(""); setPasswordError(""); setProviderLoginMethod("email"); }} style={[styles.roleBtn, { backgroundColor: "#202937" }]}>
                 <Text style={styles.roleBtnText}>{t("sign_in")}</Text>
               </Pressable>
-              <Pressable onPress={() => router.push("/(provider)/register")} style={[styles.roleBtnOutline, { borderColor: "#202937" }]}>
+              <Pressable onPress={() => router.push("/(provider)/provider-register")} style={[styles.roleBtnOutline, { borderColor: "#202937" }]}>
                 <Text style={[styles.roleBtnOutlineText, { color: "#202937" }]}>{t("register")}</Text>
               </Pressable>
             </View>
@@ -646,7 +646,7 @@ export default function YouScreen() {
                 <Text style={styles.roleBtnText}>{t("sign_in")}</Text>
               </Pressable>
               <Pressable
-                onPress={() => router.push("/(institute)/register")}
+                onPress={() => router.push("/(institute)/institute-register")}
                 style={[styles.roleBtnOutline, { borderColor: "#0D9488" }]}
               >
                 <Text style={[styles.roleBtnOutlineText, { color: "#0D9488" }]}>{t("register")}</Text>

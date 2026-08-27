@@ -4,3 +4,4 @@
 - [Restoring an uploaded zip snapshot of this monorepo template](restoring-uploaded-monorepo-zip.md) — how to diff a zip's artifact against the current scaffold and merge safely.
 - [Supabase realtime unsubscribe pitfall](supabase-realtime-unsubscribe.md) — use `supabase.removeChannel()`, not just `channel.unsubscribe()`, or remounts reuse a stale crashing channel.
 - [Verify spec docs against live app](verify-spec-docs-against-live-app.md) — uploaded project spec docs can claim wrong DB triggers/status strings; check real code + live DB.
+- [Supabase migration fallback](supabase-migration-fallback.md) — if the pooler recognizes the tenant but rejects reset passwords, use authorized Supabase management migrations.

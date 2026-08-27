@@ -210,7 +210,7 @@ export default function InstituteRegisterScreen() {
         instituteStatus: "Pending",
       });
       await setUserRole("institute");
-      router.replace("/(institute)/status");
+      router.replace("/(institute)/institute-status");
     } catch (err: any) {
       const msg: string = err?.message ?? String(err);
       Alert.alert("Registration Error", msg || "Could not complete registration. Please check your connection and try again.");

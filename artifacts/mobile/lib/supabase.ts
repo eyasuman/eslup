@@ -134,9 +134,9 @@ export async function getDoctorByUserId(userId: string) {
     .from("doctors")
     .select("*")
     .eq("userId", userId)
-    .single();
+    .limit(1);
   if (error) throw error;
-  return data;
+  return data?.[0] ?? null;
 }
 
 export async function getApprovedDoctors() {

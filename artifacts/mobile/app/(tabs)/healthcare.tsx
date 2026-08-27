@@ -513,7 +513,7 @@ export default function HealthcareScreen() {
           </View>
           {userRole === "provider" && (
             <Pressable
-              onPress={() => router.push("/(provider)/dashboard")}
+              onPress={() => router.push("/(provider)/provider-dashboard")}
               style={styles.dashBtn}
             >
               <Feather name="grid" size={16} color="#fff" />

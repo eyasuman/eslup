@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl, Platform, ActivityIndicator, Alert } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -8,7 +8,15 @@ import * as DocumentPicker from "expo-document-picker";
 
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
-import { getInstitutionByUserId, signOut, uploadInstituteLicense, upsertInstitution, deleteUpload } from "@/lib/supabase";
+import {
+  deleteUpload,
+  getInstitutionByUserId,
+  signOut,
+  subscribeToInstituteStatusChanges,
+  unsubscribeChannel,
+  uploadInstituteLicense,
+  upsertInstitution,
+} from "@/lib/supabase";
 
 export default function InstituteStatusScreen() {
   const { user, setUser, setUserRole } = useApp();
@@ -38,7 +46,7 @@ export default function InstituteStatusScreen() {
         setInstStatus(data.status || "Pending");
         if (data.status === "Active") {
           await setUser({ ...user, instituteStatus: "Active", name: data.name });
-          router.replace("/(institute)/dashboard");
+          router.replace("/(institute)/institute-dashboard");
         } else if (data.status !== user.instituteStatus) {
           await setUser({ ...user, instituteStatus: data.status, name: data.name });
         }
@@ -61,6 +69,19 @@ export default function InstituteStatusScreen() {
       fetchStatus();
     }, [user?.id])
   );
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = subscribeToInstituteStatusChanges(user.id, (status, record) => {
+      setInstStatus(status);
+      void setUser({ ...user, instituteStatus: status, name: record.name }).then(() => {
+        if (status === "Active") {
+          router.replace("/(institute)/institute-dashboard");
+        }
+      });
+    });
+    return () => unsubscribeChannel(channel);
+  }, [user?.id]);
 
   const handleSignOut = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

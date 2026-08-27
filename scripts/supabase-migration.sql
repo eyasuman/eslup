@@ -180,11 +180,11 @@ DROP POLICY IF EXISTS institute_pulse_owner_update ON public.institute_pulse;
 DROP POLICY IF EXISTS institute_pulse_public_active_select ON public.institute_pulse;
 DROP POLICY IF EXISTS institute_pulse_service_role ON public.institute_pulse;
 CREATE POLICY institute_pulse_owner_select ON public.institute_pulse
-  FOR SELECT USING ("userId" = auth.uid());
+  FOR SELECT USING ("userId" = auth.uid()::TEXT);
 CREATE POLICY institute_pulse_owner_insert ON public.institute_pulse
-  FOR INSERT WITH CHECK ("userId" = auth.uid() AND status = 'Pending');
+  FOR INSERT WITH CHECK ("userId" = auth.uid()::TEXT AND status = 'Pending');
 CREATE POLICY institute_pulse_owner_update ON public.institute_pulse
-  FOR UPDATE USING ("userId" = auth.uid()) WITH CHECK ("userId" = auth.uid());
+  FOR UPDATE USING ("userId" = auth.uid()::TEXT) WITH CHECK ("userId" = auth.uid()::TEXT);
 CREATE POLICY institute_pulse_public_active_select ON public.institute_pulse
   FOR SELECT USING (status = 'Active');
 CREATE POLICY institute_pulse_service_role ON public.institute_pulse
@@ -205,6 +205,20 @@ DROP TRIGGER IF EXISTS institute_pulse_touch_updated_at ON public.institute_puls
 CREATE TRIGGER institute_pulse_touch_updated_at
   BEFORE UPDATE ON public.institute_pulse
   FOR EACH ROW EXECUTE FUNCTION public.touch_institute_pulse_updated_at();
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'institute_pulse'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.institute_pulse;
+  END IF;
+END;
+$$;
 
 -- Provider and institute map coordinates are nullable, but must be stored as a
 -- complete, valid pair. (0,0) is rejected because legacy UI used it as a
@@ -374,13 +388,13 @@ BEGIN
     RAISE EXCEPTION 'Call invitation details cannot be changed';
   END IF;
 
-  IF auth.uid()::TEXT = OLD.patient_id
+  IF auth.uid()::TEXT = OLD.patient_id::TEXT
     AND OLD.status IN ('waiting', 'accepted')
     AND NEW.status = 'ended' THEN
     RETURN NEW;
   END IF;
 
-  IF auth.uid()::TEXT = OLD.doctor_id
+  IF auth.uid()::TEXT = OLD.doctor_id::TEXT
     AND (
       (OLD.status = 'waiting' AND NEW.status IN ('accepted', 'rejected'))
       OR (OLD.status = 'accepted' AND NEW.status = 'ended')
@@ -405,20 +419,20 @@ DROP POLICY IF EXISTS calls_doctor_status_transition ON calls;
 DROP POLICY IF EXISTS calls_service_role ON calls;
 
 CREATE POLICY "calls_participant_select" ON calls
-  FOR SELECT USING (auth.uid()::TEXT = patient_id OR auth.uid()::TEXT = doctor_id);
+  FOR SELECT USING (auth.uid()::TEXT = patient_id::TEXT OR auth.uid()::TEXT = doctor_id::TEXT);
 
 CREATE POLICY "calls_patient_insert" ON calls
-  FOR INSERT WITH CHECK (auth.uid()::TEXT = patient_id);
+  FOR INSERT WITH CHECK (auth.uid()::TEXT = patient_id::TEXT);
 
 CREATE POLICY "calls_patient_end" ON calls
   FOR UPDATE
-  USING (auth.uid()::TEXT = patient_id AND status IN ('waiting', 'accepted'))
-  WITH CHECK (auth.uid()::TEXT = patient_id AND status = 'ended');
+  USING (auth.uid()::TEXT = patient_id::TEXT AND status IN ('waiting', 'accepted'))
+  WITH CHECK (auth.uid()::TEXT = patient_id::TEXT AND status = 'ended');
 
 CREATE POLICY "calls_doctor_status_transition" ON calls
   FOR UPDATE
-  USING (auth.uid()::TEXT = doctor_id AND status IN ('waiting', 'accepted'))
-  WITH CHECK (auth.uid()::TEXT = doctor_id AND status IN ('accepted', 'rejected', 'ended'));
+  USING (auth.uid()::TEXT = doctor_id::TEXT AND status IN ('waiting', 'accepted'))
+  WITH CHECK (auth.uid()::TEXT = doctor_id::TEXT AND status IN ('accepted', 'rejected', 'ended'));
 
 CREATE POLICY "calls_service_role" ON calls
   FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
