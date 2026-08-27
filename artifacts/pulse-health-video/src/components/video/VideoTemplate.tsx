@@ -8,29 +8,23 @@ import { Scene3 } from './video_scenes/Scene3';
 import { Scene4 } from './video_scenes/Scene4';
 import { Scene5 } from './video_scenes/Scene5';
 import { Scene6 } from './video_scenes/Scene6';
-import { Scene7 } from './video_scenes/Scene7';
-import { Scene8 } from './video_scenes/Scene8';
 
 export const SCENE_DURATIONS = {
-  intro: 8000,
-  roles: 10000,
-  discovery: 14000,
-  booking: 14000,
-  consultation: 18000,
-  provider: 16000,
-  institute: 18000,
-  outro: 18000,
+  s1_home: 9000,
+  s2_specialist: 11000,
+  s3_booking: 11000,
+  s4_provider: 11000,
+  s5_institute: 11000,
+  s6_outro: 7000,
 };
 
 const SCENE_COMPONENTS: Record<string, ComponentType> = {
-  intro: Scene1,
-  roles: Scene2,
-  discovery: Scene3,
-  booking: Scene4,
-  consultation: Scene5,
-  provider: Scene6,
-  institute: Scene7,
-  outro: Scene8,
+  s1_home: Scene1,
+  s2_specialist: Scene2,
+  s3_booking: Scene3,
+  s4_provider: Scene4,
+  s5_institute: Scene5,
+  s6_outro: Scene6,
 };
 
 const SCENE_START_SEC: Record<string, number> = (() => {
@@ -59,7 +53,6 @@ export default function VideoTemplate({
   const { currentSceneKey } = useVideoPlayer({ durations, loop });
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const baseSceneKey = currentSceneKey.replace(/_r[12]$/, '');
-  const sceneIndex = Object.keys(SCENE_DURATIONS).indexOf(baseSceneKey);
   const SceneComponent = SCENE_COMPONENTS[baseSceneKey];
 
   useEffect(() => {
@@ -79,7 +72,7 @@ export default function VideoTemplate({
   }, [baseSceneKey, currentSceneKey, muted]);
 
   return (
-    <div className="w-full h-screen overflow-hidden relative bg-black font-sans">
+    <div className="w-full h-screen overflow-hidden relative bg-[#020617] font-sans flex items-center justify-center">
       <audio
         ref={audioRef}
         src={`${import.meta.env.BASE_URL}audio/composite_audio.mp3`}
@@ -89,61 +82,17 @@ export default function VideoTemplate({
         className="hidden"
       />
       
-      {/* Background Layer (Persistent) */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        <video
-          src={`${import.meta.env.BASE_URL}videos/intro-bg.mp4`}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
-            sceneIndex === 0 || sceneIndex === 1 ? 'opacity-100' : 'opacity-0'
-          }`}
+      {/* Background Ambience */}
+      <div className="absolute inset-0 pointer-events-none">
+        <motion.div 
+          className="absolute inset-0 bg-gradient-to-br from-[#0f172a] via-[#020617] to-[#1e1b4b] opacity-80"
+          animate={{ backgroundPosition: ["0% 0%", "100% 100%"] }}
+          transition={{ duration: 20, repeat: Infinity, repeatType: "mirror" }}
         />
-        <video
-          src={`${import.meta.env.BASE_URL}videos/map-bg.mp4`}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
-            sceneIndex === 2 || sceneIndex === 3 ? 'opacity-100' : 'opacity-0'
-          }`}
-        />
-        <video
-          src={`${import.meta.env.BASE_URL}videos/consultation-bg.mp4`}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
-            sceneIndex === 4 ? 'opacity-100' : 'opacity-0'
-          }`}
-        />
-        <video
-          src={`${import.meta.env.BASE_URL}videos/dashboard-bg.mp4`}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
-            sceneIndex === 5 || sceneIndex === 6 ? 'opacity-100' : 'opacity-0'
-          }`}
-        />
-        <video
-          src={`${import.meta.env.BASE_URL}videos/network-bg.mp4`}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
-            sceneIndex === 7 ? 'opacity-100' : 'opacity-0'
-          }`}
-        />
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(49,93,147,0.15)_0%,rgba(0,0,0,0)_70%)]" />
       </div>
 
+      {/* Persistent App Container (The "Phone" perspective is handled per-scene for rotation effects, but they all render within this space) */}
       <AnimatePresence mode="popLayout">
         {SceneComponent && <SceneComponent key={currentSceneKey} />}
       </AnimatePresence>

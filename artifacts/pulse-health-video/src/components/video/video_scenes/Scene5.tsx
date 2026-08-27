@@ -1,129 +1,138 @@
 import { motion } from 'framer-motion';
-import { Lock, Video, Mic, PhoneOff, Settings, User } from 'lucide-react';
+import { PhoneFrame } from './PhoneFrame';
+
+const ease = [0.16, 1, 0.3, 1] as const;
 
 export function Scene5() {
   return (
     <motion.div
+      className="absolute inset-0 flex items-center justify-center"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.8 }}
-      className="absolute inset-0 flex items-center justify-center z-10 w-full h-full"
+      exit={{ opacity: 0, x: "-100%", filter: 'blur(10px)' }}
+      transition={{ duration: 1, ease }}
     >
-      <div className="flex w-[80vw] max-w-[1200px] gap-16 items-center">
-        
-        {/* Left Side: Video Call Mockup */}
-        <div className="flex-1 relative aspect-[3/4] max-h-[80vh]">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8, rotateY: -15 }}
-            animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-            transition={{ delay: 0.5, type: "spring", stiffness: 80 }}
-            className="w-full h-full bg-slate-900 rounded-[40px] shadow-2xl overflow-hidden relative border border-slate-700/50"
-            style={{ perspective: 1000 }}
-          >
-            {/* Main Video Area (Doctor) */}
-            <div className="absolute inset-0 bg-slate-800">
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.8 }}
-                transition={{ delay: 1 }}
-                className="w-full h-full bg-cover bg-center"
-                style={{ backgroundImage: `url(${import.meta.env.BASE_URL}images/doctor.jpg)` }}
-              />
+      {/* Background Typography */}
+      <motion.div 
+        className="absolute right-16 top-1/2 -translate-y-1/2 max-w-sm hidden lg:block text-right"
+        initial={{ opacity: 0, x: 50 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 1, delay: 1, ease }}
+      >
+        <h2 className="text-4xl font-display font-bold text-white mb-4">
+          Institute <span className="text-[#0D9488]">Dashboard</span>
+        </h2>
+        <p className="text-lg text-slate-300">
+          Oversee your network, manage profile details, active services, and facility capacity.
+        </p>
+      </motion.div>
+
+      <PhoneFrame
+        initial={{ x: "100%", scale: 0.9, rotateY: -10 }}
+        animate={{ x: 0, scale: 1, rotateY: 0 }}
+        transition={{ duration: 1.5, ease }}
+        className="bg-slate-50"
+      >
+        <div className="w-full h-full bg-slate-50 flex flex-col">
+          {/* Header */}
+          <div className="bg-[#0D9488] pt-14 pb-12 px-5 relative overflow-hidden">
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay" />
+            <div className="relative z-10 flex justify-between items-start">
+              <div>
+                <div className="text-white text-2xl font-bold">City General</div>
+                <div className="text-teal-100 text-xs mt-1 flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                  </svg>
+                  Addis Ababa
+                </div>
+              </div>
+              <div className="w-12 h-12 bg-white rounded-xl shadow-lg p-1">
+                <img src={`${import.meta.env.BASE_URL}images/hospital.jpg`} alt="Logo" className="w-full h-full rounded-lg object-cover" />
+              </div>
+            </div>
+          </div>
+
+          {/* Overlapping Content */}
+          <div className="px-5 -mt-6 flex-1 z-10">
+            {/* Tabs */}
+            <div className="bg-white rounded-2xl shadow-sm p-1 flex mb-4 border border-slate-100">
+              <div className="flex-1 text-center py-2 bg-slate-100 rounded-xl text-[#0D9488] font-bold text-xs">Overview</div>
+              <div className="flex-1 text-center py-2 text-slate-500 font-medium text-xs">Profile</div>
+              <div className="flex-1 text-center py-2 text-slate-500 font-medium text-xs">Services</div>
             </div>
 
-            {/* Self View (Patient) */}
-            <motion.div
-              initial={{ opacity: 0, x: 20, y: -20 }}
-              animate={{ opacity: 1, x: 0, y: 0 }}
-              transition={{ delay: 1.5, type: "spring" }}
-              className="absolute top-6 right-6 w-32 aspect-[3/4] bg-slate-700 rounded-2xl border-2 border-slate-600 overflow-hidden shadow-xl"
-            >
-              <div 
-                className="w-full h-full bg-cover bg-center opacity-80" 
-                style={{ backgroundImage: `url(${import.meta.env.BASE_URL}images/patient.jpg)` }}
-              />
-            </motion.div>
+            {/* Status */}
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-100 mb-4 flex justify-between items-center">
+              <div>
+                <div className="text-[#202937] font-bold text-sm">Institute Status</div>
+                <div className="text-xs text-slate-500">Currently visible in app</div>
+              </div>
+              <div className="bg-green-100 px-3 py-1 rounded-full text-green-700 text-xs font-bold flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-green-600 animate-pulse" />
+                Active and Listed
+              </div>
+            </div>
 
-            {/* Top Bar (Encrypted, Timer) */}
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.2 }}
-              className="absolute top-6 left-6 right-6 flex justify-between items-start pointer-events-none"
-            >
-              <div className="flex flex-col gap-2">
-                <div className="px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-md flex items-center gap-2 w-fit border border-white/10">
-                  <Lock size={12} className="text-secondary" />
-                  <span className="text-[11px] font-semibold text-secondary uppercase tracking-wider">End-to-End Encrypted</span>
+            {/* Overview Stats */}
+            <div className="flex gap-2 mb-4">
+              <div className="flex-1 bg-white p-3 rounded-xl shadow-sm border border-slate-100 text-center">
+                <div className="text-2xl font-bold text-[#202937]">42</div>
+                <div className="text-[10px] text-slate-500 font-medium mt-1">Total Doctors</div>
+              </div>
+              <div className="flex-1 bg-white p-3 rounded-xl shadow-sm border border-slate-100 text-center">
+                <div className="text-2xl font-bold text-[#202937]">18</div>
+                <div className="text-[10px] text-slate-500 font-medium mt-1">Total Beds</div>
+              </div>
+              <div className="flex-1 bg-white p-3 rounded-xl shadow-sm border border-slate-100 text-center">
+                <div className="text-2xl font-bold text-[#202937]">12</div>
+                <div className="text-[10px] text-slate-500 font-medium mt-1">Total Services</div>
+              </div>
+            </div>
+
+            {/* Quick Information List */}
+            <div className="text-[#202937] font-bold text-sm mb-3">Quick Information</div>
+            
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-4 flex items-center border-b border-slate-50 gap-3">
+                <div className="w-8 h-8 rounded-full bg-teal-50 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-[#0D9488]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
                 </div>
-                <div className="px-3 py-1.5 rounded-full bg-red-500/20 backdrop-blur-md flex items-center gap-2 w-fit border border-red-500/30">
-                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                  <span className="text-[12px] font-bold text-white tracking-widest">12:45</span>
+                <div>
+                  <div className="text-[#202937] font-bold text-xs">Profile</div>
+                  <div className="text-[10px] text-slate-500 font-medium">Basic details & location</div>
                 </div>
               </div>
-            </motion.div>
-
-            {/* Waiting Room Overlay Concept (Fades out) */}
-            <motion.div
-              initial={{ opacity: 1 }}
-              animate={{ opacity: 0, scale: 1.1 }}
-              transition={{ delay: 2.5, duration: 1 }}
-              className="absolute inset-0 bg-slate-900 z-10 flex flex-col items-center justify-center p-8 text-center"
-            >
-              <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mb-6">
-                <User size={32} className="text-primary animate-pulse" />
+              
+              <div className="p-4 flex items-center border-b border-slate-50 gap-3">
+                <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-[#202937] font-bold text-xs">Services</div>
+                  <div className="text-[10px] text-slate-500 font-medium">Manage available departments</div>
+                </div>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">Waiting for Dr. Jenkins...</h3>
-              <p className="text-slate-400">Your secure connection is ready. The doctor will join shortly.</p>
-            </motion.div>
-
-            {/* Bottom Controls */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.8 }}
-              className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 p-4 rounded-full bg-black/60 backdrop-blur-xl border border-white/10 z-0"
-            >
-              <div className="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center text-white/80">
-                <Settings size={20} />
-              </div>
-              <div className="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center text-white">
-                <Video size={20} />
-              </div>
-              <div className="w-12 h-12 rounded-full bg-slate-800/80 flex items-center justify-center text-white">
-                <Mic size={20} />
-              </div>
-              <div className="w-14 h-14 rounded-full bg-red-500 flex items-center justify-center text-white shadow-lg shadow-red-500/30">
-                <PhoneOff size={24} />
-              </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         </div>
 
-        {/* Right Side: Copy */}
-        <div className="flex-1 flex flex-col gap-6">
-          <motion.h2
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8, type: "spring", stiffness: 100 }}
-            className="text-6xl font-display font-bold text-white leading-tight"
-          >
-            Consult <span className="text-secondary">instantly.</span><br/>
-            Securely.
-          </motion.h2>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.1, type: "spring", stiffness: 100 }}
-            className="text-2xl text-blue-100/80 font-sans max-w-lg leading-relaxed"
-          >
-            Experience high-definition, encrypted video care. Wait comfortably, connect instantly.
-          </motion.p>
-        </div>
-
-      </div>
+        {/* Cursors */}
+        <motion.div
+          className="absolute z-50 pointer-events-none"
+          initial={{ x: 300, y: 700, opacity: 0 }}
+          animate={{ x: [300, 270, 270, 300], y: [700, 520, 520, 700], opacity: [0, 1, 1, 0] }}
+          transition={{ duration: 2, delay: 6, ease: "easeInOut" }}
+        >
+          <div className="w-12 h-12 rounded-full bg-black/20 shadow-2xl flex items-center justify-center backdrop-blur-sm border border-white/50">
+            <div className="w-4 h-4 bg-white rounded-full shadow-inner" />
+          </div>
+        </motion.div>
+      </PhoneFrame>
     </motion.div>
   );
 }

@@ -13,14 +13,12 @@ import { useSceneControls } from './useSceneControls';
 const PROGRESS_TICK_MS = 60;
 
 const SCENE_DETAILS: Record<string, { title: string; filePath: string }> = {
-  intro: { title: 'Connected Care', filePath: 'src/components/video/video_scenes/Scene1.tsx' },
-  roles: { title: 'Choose Your Path', filePath: 'src/components/video/video_scenes/Scene2.tsx' },
-  discovery: { title: 'Discover Care', filePath: 'src/components/video/video_scenes/Scene3.tsx' },
-  booking: { title: 'Book Care', filePath: 'src/components/video/video_scenes/Scene4.tsx' },
-  consultation: { title: 'Video Consultation', filePath: 'src/components/video/video_scenes/Scene5.tsx' },
-  provider: { title: 'Provider Journey', filePath: 'src/components/video/video_scenes/Scene6.tsx' },
-  institute: { title: 'Institute Management', filePath: 'src/components/video/video_scenes/Scene7.tsx' },
-  outro: { title: 'Pulse Health Network', filePath: 'src/components/video/video_scenes/Scene8.tsx' },
+  s1_home: { title: 'App Launch', filePath: 'src/components/video/video_scenes/Scene1.tsx' },
+  s2_specialist: { title: 'Discover Care', filePath: 'src/components/video/video_scenes/Scene2.tsx' },
+  s3_booking: { title: 'Book & Confirm', filePath: 'src/components/video/video_scenes/Scene3.tsx' },
+  s4_provider: { title: 'Provider Dashboard', filePath: 'src/components/video/video_scenes/Scene4.tsx' },
+  s5_institute: { title: 'Institute Control', filePath: 'src/components/video/video_scenes/Scene5.tsx' },
+  s6_outro: { title: 'Appointment & Outro', filePath: 'src/components/video/video_scenes/Scene6.tsx' },
 };
 
 function announceSceneSelection(index: number, sceneKeys: string[]) {
