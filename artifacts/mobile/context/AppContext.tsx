@@ -24,6 +24,7 @@ export interface User {
   phone: string;
   role: UserRole;
   avatar?: string;
+  profileImageUploadId?: string;
   doctorStatus?: string;    // 'Pending' | 'Active' | 'Disabled' | 'Declined'
   instituteStatus?: string; // 'Pending' | 'Active' | 'Declined'
 }
@@ -154,6 +155,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             phone,
             role,
             avatar: undefined,
+            profileImageUploadId: doctorProfile?.profileImageUploadId ?? undefined,
             doctorStatus: doctorProfile?.status ?? undefined,
             instituteStatus: instituteProfile?.status ?? undefined,
           };
@@ -353,6 +355,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           phone: phone2,
           role,
           avatar: undefined,
+          profileImageUploadId: doctorProfile?.profileImageUploadId ?? undefined,
           doctorStatus: doctorProfile?.status ?? undefined,
           instituteStatus: instituteProfile2?.status ?? undefined,
         };

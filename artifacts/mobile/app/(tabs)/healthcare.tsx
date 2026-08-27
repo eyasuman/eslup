@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -141,12 +142,18 @@ export default function HealthcareScreen() {
   const [bodyPart, setBodyPart] = useState("");
   const [showBodyDropdown, setShowBodyDropdown] = useState(false);
   const [urgency, setUrgency] = useState("routine");
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadedImage, setUploadedImage] = useState<{
+    uri: string;
+    name: string;
+    type: string;
+    isVideo: boolean;
+  } | null>(null);
   const [patientName, setPatientName] = useState("");
   const [patientAge, setPatientAge] = useState("");
   const [patientGender, setPatientGender] = useState<"male" | "female" | "other">("male");
   const [symptoms, setSymptoms] = useState("");
   const [assignedRadiologist, setAssignedRadiologist] = useState("");
+  const [assignedRadiologistId, setAssignedRadiologistId] = useState("");
   const [showRadiologistDropdown, setShowRadiologistDropdown] = useState(false);
   const [showReportsModal, setShowReportsModal] = useState(false);
 
@@ -303,7 +310,14 @@ export default function HealthcareScreen() {
         });
       }
       if (!result.canceled && result.assets[0]) {
-        setUploadedImage(result.assets[0].uri);
+        const asset = result.assets[0];
+        const type = asset.mimeType ?? (asset.type === "video" ? "video/mp4" : "image/jpeg");
+        setUploadedImage({
+          uri: asset.uri,
+          name: asset.fileName ?? (type.startsWith("video/") ? "radiology-scan.mp4" : "radiology-scan.jpg"),
+          type,
+          isVideo: type.startsWith("video/"),
+        });
         setUploadStep(2);
       }
     } catch {
@@ -311,9 +325,34 @@ export default function HealthcareScreen() {
     }
   };
 
+  const pickScanDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*", "video/mp4", "video/quicktime"],
+        copyToCacheDirectory: true,
+      });
+      const asset = result.assets?.[0];
+      if (!asset) return;
+      const type = asset.mimeType ?? "application/octet-stream";
+      setUploadedImage({
+        uri: asset.uri,
+        name: asset.name,
+        type,
+        isVideo: type.startsWith("video/"),
+      });
+      setUploadStep(2);
+    } catch (error: any) {
+      Alert.alert("File Error", error?.message ?? "The scan file could not be opened.");
+    }
+  };
+
   const submitScan = async () => {
-    if (!patientName.trim() || !scanType || !bodyPart) {
-      Alert.alert("Missing Info", "Please fill in patient name, scan type and body part.");
+    if (!patientName.trim() || !scanType || !bodyPart || !uploadedImage) {
+      Alert.alert("Missing Info", "Please attach a scan and fill in patient name, scan type and body part.");
+      return;
+    }
+    if (!assignedRadiologistId) {
+      Alert.alert("Radiologist Required", "Please select an available radiologist before submitting the scan.");
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -328,13 +367,20 @@ export default function HealthcareScreen() {
           body_part: bodyPart,
           urgency,
           symptoms: symptoms.trim() || undefined,
+          assigned_radiologist_id: assignedRadiologistId,
           assigned_radiologist_name: assignedRadiologist || undefined,
-          scan_image_uri: uploadedImage,
+          scan_image_uri: uploadedImage.isVideo ? null : uploadedImage.uri,
+          scan_image_name: uploadedImage.isVideo ? null : uploadedImage.name,
+          scan_image_type: uploadedImage.isVideo ? null : uploadedImage.type,
+          scan_video_uri: uploadedImage.isVideo ? uploadedImage.uri : null,
+          scan_video_name: uploadedImage.isVideo ? uploadedImage.name : null,
+          scan_video_type: uploadedImage.isVideo ? uploadedImage.type : null,
         });
         setRadiologyCases((prev) => [rec, ...prev]);
       }
-    } catch {
-      // Supabase unavailable — still show success UI (offline-friendly)
+    } catch (error: any) {
+      Alert.alert("Upload Failed", error?.message ?? "The scan could not be securely stored. Please try again.");
+      return;
     }
 
     Alert.alert(
@@ -346,7 +392,7 @@ export default function HealthcareScreen() {
       ]
     );
     setUploadedImage(null); setPatientName(""); setPatientAge(""); setScanType("");
-    setBodyPart(""); setSymptoms(""); setUploadStep(1); setAssignedRadiologist(""); setUrgency("routine");
+    setBodyPart(""); setSymptoms(""); setUploadStep(1); setAssignedRadiologist(""); setAssignedRadiologistId(""); setUrgency("routine");
   };
 
   const resetUploadModal = () => {
@@ -356,7 +402,7 @@ export default function HealthcareScreen() {
     setScanType(""); setBodyPart(""); setSymptoms("");
     setPatientName(""); setPatientAge(""); setUrgency("routine");
     setShowScanDropdown(false); setShowBodyDropdown(false);
-    setShowRadiologistDropdown(false); setAssignedRadiologist("");
+    setShowRadiologistDropdown(false); setAssignedRadiologist(""); setAssignedRadiologistId("");
   };
 
   const Container = isDark ? HealthDarkContainer : HealthLightContainer;
@@ -920,8 +966,8 @@ export default function HealthcareScreen() {
           >
             <Feather name="shield" size={14} color="#315d93" />
             <Text style={[styles.secNoteText, { color: textMuted }]}>
-              All scans are encrypted end-to-end. Only authorized radiologists and assigned doctors can access
-              patient data. Fully HIPAA-compliant.
+              Scans are stored privately. Only the owner, authorized radiologists, and administrators can request
+              short-lived access links.
             </Text>
           </View>
         </ScrollView>
@@ -1030,10 +1076,7 @@ export default function HealthcareScreen() {
                       { icon: "image" as const, label: "Upload from Gallery", desc: "Choose from phone gallery", onPress: () => pickImage("gallery") },
                       {
                         icon: "file" as const, label: "Upload DICOM / PDF", desc: "Select medical file from device",
-                        onPress: () => {
-                          Alert.alert("DICOM/PDF", "File picker would open here. Feature requires native build.");
-                          setUploadStep(2);
-                        },
+                        onPress: pickScanDocument,
                       },
                     ].map((src) => (
                       <Pressable
@@ -1061,8 +1104,14 @@ export default function HealthcareScreen() {
                   </View>
                 ) : (
                   <View style={{ gap: 14, padding: 20 }}>
-                    {uploadedImage && (
-                      <Image source={{ uri: uploadedImage }} style={styles.uploadPreview} resizeMode="cover" />
+                    {uploadedImage && uploadedImage.type.startsWith("image/") && (
+                      <Image source={{ uri: uploadedImage.uri }} style={styles.uploadPreview} resizeMode="cover" />
+                    )}
+                    {uploadedImage && !uploadedImage.type.startsWith("image/") && (
+                      <View style={[styles.uploadPreview, { alignItems: "center", justifyContent: "center", backgroundColor: "#202937" }]}>
+                        <Feather name={uploadedImage.isVideo ? "film" : "file-text"} size={36} color="#7FA8D8" />
+                        <Text style={{ color: "#fff", marginTop: 8 }}>{uploadedImage.name}</Text>
+                      </View>
                     )}
 
                     <View>
@@ -1221,20 +1270,20 @@ export default function HealthcareScreen() {
                         style={[styles.dropdown, { backgroundColor: inputBg, borderColor: cardBorder }]}
                       >
                         <Text style={[styles.dropdownText, { color: assignedRadiologist ? textPrimary : textMuted }]}>
-                          {assignedRadiologist || "Auto-assign (recommended)"}
+                          {assignedRadiologist || "Select a radiologist"}
                         </Text>
                         <Feather name={showRadiologistDropdown ? "chevron-up" : "chevron-down"} size={16} color={textMuted} />
                       </Pressable>
                       {showRadiologistDropdown && (
                         <View style={[styles.dropdownList, { backgroundColor: isDark ? "#1E2B3D" : "#fff", borderColor: cardBorder }]}>
                           <Pressable
-                            onPress={() => { setAssignedRadiologist(""); setShowRadiologistDropdown(false); }}
+                            onPress={() => { setAssignedRadiologist(""); setAssignedRadiologistId(""); setShowRadiologistDropdown(false); }}
                             style={[styles.dropdownItem, { borderBottomColor: cardBorder }]}
                           >
                             <View style={{ flex: 1 }}>
-                              <Text style={[styles.dropdownItemText, { color: textPrimary }]}>Auto-assign</Text>
+                              <Text style={[styles.dropdownItemText, { color: textPrimary }]}>Choose later</Text>
                               <Text style={[{ color: textMuted, fontSize: 11, fontFamily: "Inter_400Regular" }]}>
-                                Best match based on scan type & availability
+                                A radiologist is required before submission
                               </Text>
                             </View>
                             {!assignedRadiologist && <Feather name="check" size={14} color="#315d93" />}
@@ -1249,7 +1298,7 @@ export default function HealthcareScreen() {
                             radiologists.map((rad) => (
                               <Pressable
                                 key={rad.userId}
-                                onPress={() => { setAssignedRadiologist(rad.name); setShowRadiologistDropdown(false); }}
+                                onPress={() => { setAssignedRadiologist(rad.name); setAssignedRadiologistId(rad.userId); setShowRadiologistDropdown(false); }}
                                 style={[styles.dropdownItem, { borderBottomColor: cardBorder }]}
                               >
                                 <View style={{ flex: 1 }}>

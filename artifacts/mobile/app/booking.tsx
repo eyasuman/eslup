@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import * as Crypto from "expo-crypto";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
@@ -18,7 +19,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp, Booking } from "@/context/AppContext";
-import { createAppointment, createNotification, getApprovedDoctors, getSetting, uploadPaymentProof } from "@/lib/supabase";
+import { createAppointment, createNotification, deleteUpload, getApprovedDoctors, getSetting, uploadPaymentProof } from "@/lib/supabase";
 import { useColors } from "@/hooks/useColors";
 import { formatEtDatePill } from "@/lib/ethiopianCalendar";
 
@@ -141,7 +142,7 @@ export default function BookingScreen() {
   const [consultType, setConsultType] = useState<"video" | "phone" | "homecare">("video");
   const [paymentMethod, setPaymentMethod] = useState<"telebirr" | "cbe">("telebirr");
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-  const [proofImage, setProofImage] = useState<string | null>(null);
+  const [proofImage, setProofImage] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [senderName, setSenderName] = useState(user?.name ?? "");
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
@@ -187,7 +188,12 @@ export default function BookingScreen() {
         result = await ImagePicker.launchImageLibraryAsync({ quality: 0.9, allowsMultipleSelection: false, mediaTypes: ImagePicker.MediaTypeOptions.Images });
       }
       if (!result.canceled && result.assets[0]) {
-        setProofImage(result.assets[0].uri);
+        const asset = result.assets[0];
+        setProofImage({
+          uri: asset.uri,
+          name: asset.fileName ?? "payment-proof.jpg",
+          type: asset.mimeType ?? "image/jpeg",
+        });
         if (!paidAmount) setPaidAmount(amountFormatted);
       }
     } catch {
@@ -198,6 +204,10 @@ export default function BookingScreen() {
   const handleSubmitPayment = async () => {
     if (!proofImage) { Alert.alert("Proof Required", "Please upload a screenshot or photo of your payment."); return; }
     if (!senderName.trim()) { Alert.alert("Missing Info", "Please enter the sender name."); return; }
+    if (!user?.id) {
+      Alert.alert("Sign In Required", "Please sign in before submitting payment. Payment proofs are stored privately under your account.");
+      return;
+    }
     setSubmitting(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
@@ -215,13 +225,20 @@ export default function BookingScreen() {
     const effectiveName  = user?.name  ?? guestName.trim()  ?? "Guest";
     const effectiveEmail = user?.email ?? guestPhone.trim() ?? "";
 
-    let proofUrl = "";
-    if (proofImage && user?.id) {
-      try {
-        proofUrl = await uploadPaymentProof(user.id, proofImage);
-      } catch (err) {
-        console.error("Failed to upload proof", err);
-      }
+    let proofUpload: Awaited<ReturnType<typeof uploadPaymentProof>> | null = null;
+    const appointmentId = Crypto.randomUUID();
+    try {
+      proofUpload = await uploadPaymentProof(
+        user.id,
+        proofImage.uri,
+        proofImage.name,
+        proofImage.type,
+        appointmentId
+      );
+    } catch (err: any) {
+      Alert.alert("Upload Failed", err?.message ?? "Your payment proof could not be saved. Please try again.");
+      setSubmitting(false);
+      return;
     }
 
     const newBooking: Booking = {
@@ -237,12 +254,11 @@ export default function BookingScreen() {
       currency,
     };
 
-    await addBooking(newBooking);
-
-    // Persist to Supabase appointments table (guests use a placeholder patientId)
+    // Persist only after the required private payment proof is safely stored.
     try {
-      await createAppointment({
-        patientId: user?.id ?? `guest-${Date.now()}`,
+      const appointment = await createAppointment({
+        id: appointmentId,
+        patientId: user.id,
         patientName: effectiveName,
         patientEmail: effectiveEmail,
           doctorUserId: doctorId ?? undefined,
@@ -253,15 +269,20 @@ export default function BookingScreen() {
           consultationFee: parseFloat(amountFormatted),
           platformFee: 5,
           totalPrice: parseFloat(amountFormatted) + 5,
-          paymentProofUrl: proofUrl,
+          paymentProofUrl: proofUpload.storagePath,
+          paymentProofUploadId: proofUpload.id,
           paymentMethod: paymentMethod,
           transactionId: transactionId || "N/A",
           senderName: senderName,
           notes: (paymentMethod === "telebirr" ? "Telebirr" : "CBE") + " | Sender: " + senderName + (paymentNote ? " | Note: " + paymentNote : ""),
-        });
-    } catch (err) {
-      console.error("Supabase creation failed", err);
-      // Supabase unavailable — local booking still saved
+      });
+      newBooking.id = appointment.id;
+      await addBooking(newBooking);
+    } catch (err: any) {
+      await deleteUpload(proofUpload.id).catch(() => {});
+      Alert.alert("Booking Failed", err?.message ?? "Your appointment could not be saved. No payment proof was retained.");
+      setSubmitting(false);
+      return;
     }
 
     // ── Local in-app notification (always, even for guests) ──────────────────
@@ -703,7 +724,7 @@ export default function BookingScreen() {
 
               {proofImage ? (
                 <View style={{ gap: 10 }}>
-                  <Image source={{ uri: proofImage }} style={styles.proofPreview} resizeMode="cover" />
+                  <Image source={{ uri: proofImage.uri }} style={styles.proofPreview} resizeMode="cover" />
                   <Pressable onPress={() => setProofImage(null)} style={[styles.removeBtn, { borderColor: "#DC2626" + "40" }]}>
                     <Feather name="x" size={14} color="#DC2626" />
                     <Text style={[styles.removeBtnText, { color: "#DC2626" }]}>Remove & re-upload</Text>

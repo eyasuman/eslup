@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Crypto from "expo-crypto";
+import { fetch as expoFetch } from "expo/fetch";
 import { Platform } from "react-native";
 import { Hospital } from "@/data/ethiopianHospitals";
 
@@ -120,6 +122,8 @@ export interface SupabaseDoctor {
   cbeAccount?: string;
   lat?: number;
   lng?: number;
+  profileImageUploadId?: string;
+  licenseUploadId?: string;
 }
 
 export async function getDoctorByUserId(userId: string) {
@@ -327,88 +331,336 @@ export async function updateProviderAvailability(
   return updateDoctorOnlineStatus(userId, available);
 }
 
-// ─── GENERIC SUPABASE STORAGE UPLOAD ────────────────────────────────────────────
-export type UploadableFile = { uri: string; name?: string; type?: string };
+// ─── CATEGORIZED PRIVATE STORAGE ───────────────────────────────────────────────
+export const PRIVATE_UPLOAD_BUCKET = "user-uploads";
 
-export async function uploadFile(
-  bucket: string,
-  path: string,
-  file: UploadableFile,
-  contentType?: string
-): Promise<{ path: string; publicUrl: string }> {
-  if (file.uri.startsWith("mock://") || file.uri.startsWith("http")) {
-    throw new Error("Cannot upload a mock or remote URI directly.");
+export type UploadCategory =
+  | "profile_image"
+  | "payment_proof"
+  | "provider_license"
+  | "institute_license"
+  | "certificate"
+  | "radiology_image"
+  | "radiology_video";
+
+export type UploadableFile = {
+  uri: string;
+  name?: string;
+  type?: string;
+  size?: number;
+};
+
+export interface StoredUpload {
+  id: string;
+  ownerId: string;
+  category: UploadCategory;
+  bucket: string;
+  storagePath: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  relatedTable?: string | null;
+  relatedId?: string | null;
+  signedUrl: string;
+  replacedUploadId?: string;
+  cleanupPending?: boolean;
+}
+
+const UPLOAD_RULES: Record<UploadCategory, { maxBytes: number; mimePrefixes: string[]; mimeTypes?: string[] }> = {
+  profile_image: { maxBytes: 10 * 1024 * 1024, mimePrefixes: ["image/"] },
+  payment_proof: { maxBytes: 10 * 1024 * 1024, mimePrefixes: ["image/"] },
+  provider_license: { maxBytes: 15 * 1024 * 1024, mimePrefixes: ["image/"], mimeTypes: ["application/pdf"] },
+  institute_license: { maxBytes: 15 * 1024 * 1024, mimePrefixes: ["image/"], mimeTypes: ["application/pdf"] },
+  certificate: { maxBytes: 15 * 1024 * 1024, mimePrefixes: ["image/"], mimeTypes: ["application/pdf"] },
+  radiology_image: { maxBytes: 25 * 1024 * 1024, mimePrefixes: ["image/"], mimeTypes: ["application/pdf"] },
+  radiology_video: { maxBytes: 200 * 1024 * 1024, mimePrefixes: ["video/"] },
+};
+
+function cleanFileName(name: string) {
+  const cleaned = name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_");
+  return cleaned.slice(-120) || "upload.bin";
+}
+
+function inferFileName(file: UploadableFile, category: UploadCategory) {
+  if (file.name) return cleanFileName(file.name);
+  const uriName = file.uri.split("/").pop()?.split("?")[0];
+  if (uriName?.includes(".")) return cleanFileName(uriName);
+  const extension = file.type?.split("/")[1]?.replace("jpeg", "jpg") || (category.includes("image") ? "jpg" : "bin");
+  return `${category}.${extension}`;
+}
+
+function resolveMimeType(file: UploadableFile, responseType: string | null) {
+  const candidate = (file.type || responseType || "").toLowerCase().split(";")[0].trim();
+  if (candidate && candidate !== "application/octet-stream") return candidate;
+  const fileName = (file.name || file.uri.split("/").pop() || "").toLowerCase().split("?")[0];
+  const extensionMap: Record<string, string> = {
+    ".pdf": "application/pdf",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".heic": "image/heic",
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".webm": "video/webm",
+  };
+  const extension = Object.keys(extensionMap).find((suffix) => fileName.endsWith(suffix));
+  return extension ? extensionMap[extension] : "application/octet-stream";
+}
+
+function validateUpload(category: UploadCategory, mimeType: string, size: number) {
+  const rules = UPLOAD_RULES[category];
+  const accepted = rules.mimePrefixes.some((prefix) => mimeType.startsWith(prefix))
+    || rules.mimeTypes?.includes(mimeType);
+  if (!accepted) {
+    throw new Error(`This file type (${mimeType}) is not allowed for ${category.replace(/_/g, " ")}.`);
   }
-  const response = await fetch(file.uri);
-  const blob = await response.blob();
-  const type = contentType ?? blob.type ?? file.type ?? "application/octet-stream";
+  if (size <= 0) throw new Error("The selected file is empty.");
+  if (size > rules.maxBytes) {
+    throw new Error(`The selected file is too large. Maximum size is ${Math.round(rules.maxBytes / 1024 / 1024)} MB.`);
+  }
+}
+
+export async function getSignedUploadUrl(uploadId: string, expiresIn = 15 * 60): Promise<string> {
+  const { data: upload, error: metadataError } = await supabase
+    .from("user_uploads")
+    .select("bucket, storage_path, status")
+    .eq("id", uploadId)
+    .single();
+  if (metadataError) throw metadataError;
+  if (!upload || upload.status !== "active") throw new Error("This file is no longer available.");
   const { data, error } = await supabase.storage
-    .from(bucket)
-    .upload(path, blob, { contentType: type, upsert: true });
+    .from(upload.bucket)
+    .createSignedUrl(upload.storage_path, expiresIn);
   if (error) throw error;
-  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
-  return { path: data.path, publicUrl: urlData.publicUrl };
+  return data.signedUrl;
 }
 
-// ─── PROFILE IMAGE UPLOAD ──────────────────────────────────────────────────────
+async function getSignedUploadDetails(uploadId: string, expiresIn = 15 * 60) {
+  const { data: upload, error: metadataError } = await supabase
+    .from("user_uploads")
+    .select("bucket, storage_path, original_name, mime_type, status")
+    .eq("id", uploadId)
+    .single();
+  if (metadataError) throw metadataError;
+  if (!upload || upload.status !== "active") throw new Error("This file is no longer available.");
+  const { data, error } = await supabase.storage
+    .from(upload.bucket)
+    .createSignedUrl(upload.storage_path, expiresIn);
+  if (error) throw error;
+  return {
+    url: data.signedUrl,
+    name: upload.original_name as string,
+    mimeType: upload.mime_type as string,
+  };
+}
 
-export async function uploadProfileImage(userId: string, imageUri: string): Promise<string> {
-  const ext = imageUri.split(".").pop()?.split("?")[0] ?? "jpg";
-  const fileName = `${userId}/avatar_${Date.now()}.${ext}`;
-  const { publicUrl } = await uploadFile(
-    "profile-images",
-    fileName,
-    { uri: imageUri, type: `image/${ext}` },
-    `image/${ext}`
+export async function linkUpload(uploadId: string, relatedTable: string, relatedId: string) {
+  const { error } = await supabase
+    .from("user_uploads")
+    .update({ related_table: relatedTable, related_id: relatedId, updated_at: new Date().toISOString() })
+    .eq("id", uploadId);
+  if (error) throw error;
+}
+
+export async function deleteUpload(uploadId: string) {
+  const { data: upload, error: fetchError } = await supabase
+    .from("user_uploads")
+    .select("bucket, storage_path")
+    .eq("id", uploadId)
+    .single();
+  if (fetchError) throw fetchError;
+  const { error: pendingError } = await supabase
+    .from("user_uploads")
+    .update({ status: "deletion_pending", updated_at: new Date().toISOString() })
+    .eq("id", uploadId);
+  if (pendingError) throw pendingError;
+  const { error: storageError } = await supabase.storage.from(upload.bucket).remove([upload.storage_path]);
+  if (storageError) throw storageError;
+  const { error: metadataError } = await supabase
+    .from("user_uploads")
+    .update({ status: "deleted", deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", uploadId);
+  if (metadataError) throw metadataError;
+}
+
+async function retryPendingUploadCleanup(ownerId: string) {
+  const { data } = await supabase
+    .from("user_uploads")
+    .select("id")
+    .eq("owner_id", ownerId)
+    .eq("status", "deletion_pending")
+    .limit(10);
+  for (const pending of data ?? []) {
+    await deleteUpload(pending.id).catch(() => {});
+  }
+}
+
+export async function uploadCategorizedFile(
+  ownerId: string,
+  category: UploadCategory,
+  file: UploadableFile,
+  options: { relatedTable?: string; relatedId?: string; replaceUploadId?: string } = {}
+): Promise<StoredUpload> {
+  if (!ownerId) throw new Error("You must be signed in to upload files.");
+  if (!file.uri || file.uri.startsWith("mock://") || /^https?:\/\//i.test(file.uri)) {
+    throw new Error("Please select a real file from this device.");
+  }
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || userData.user?.id !== ownerId) {
+    throw new Error("Your session does not match the file owner. Please sign in again.");
+  }
+  await retryPendingUploadCleanup(ownerId);
+
+  const response = await expoFetch(file.uri);
+  const body = await response.arrayBuffer();
+  const mimeType = resolveMimeType(file, response.headers.get("content-type"));
+  const sizeBytes = file.size ?? body.byteLength;
+  validateUpload(category, mimeType, sizeBytes);
+
+  const originalName = inferFileName(file, category);
+  const storagePath = `${ownerId}/${category}/${Crypto.randomUUID()}-${originalName}`;
+  const { error: uploadError } = await supabase.storage
+    .from(PRIVATE_UPLOAD_BUCKET)
+    .upload(storagePath, body, { contentType: mimeType, upsert: false, cacheControl: "3600" });
+  if (uploadError) throw uploadError;
+
+  const uploadId = Crypto.randomUUID();
+  const { error: metadataError } = await supabase.from("user_uploads").insert({
+    id: uploadId,
+    owner_id: ownerId,
+    category,
+    bucket: PRIVATE_UPLOAD_BUCKET,
+    storage_path: storagePath,
+    original_name: originalName,
+    mime_type: mimeType,
+    size_bytes: sizeBytes,
+    related_table: options.relatedTable ?? null,
+    related_id: options.relatedId ?? null,
+    status: "active",
+  });
+  if (metadataError) {
+    await supabase.storage.from(PRIVATE_UPLOAD_BUCKET).remove([storagePath]);
+    throw new Error(`The file was not saved because its metadata could not be recorded: ${metadataError.message}`);
+  }
+
+  try {
+    const { data, error } = await supabase.storage
+      .from(PRIVATE_UPLOAD_BUCKET)
+      .createSignedUrl(storagePath, 15 * 60);
+    if (error) throw error;
+    if (options.replaceUploadId) {
+      await deleteUpload(options.replaceUploadId);
+    }
+    return {
+      id: uploadId,
+      ownerId,
+      category,
+      bucket: PRIVATE_UPLOAD_BUCKET,
+      storagePath,
+      originalName,
+      mimeType,
+      sizeBytes,
+      relatedTable: options.relatedTable,
+      relatedId: options.relatedId,
+      signedUrl: data.signedUrl,
+    };
+  } catch (error) {
+    await deleteUpload(uploadId).catch(() => {});
+    throw error;
+  }
+}
+
+export async function uploadProfileImage(
+  userId: string,
+  imageUri: string,
+  replaceUploadId?: string,
+  fileName = "profile-image.jpg",
+  mimeType = "image/jpeg"
+): Promise<StoredUpload> {
+  const upload = await uploadCategorizedFile(
+    userId,
+    "profile_image",
+    { uri: imageUri, name: fileName, type: mimeType },
+    { relatedTable: "doctors", relatedId: userId }
   );
-  await supabase
+  const { error } = await supabase
     .from("doctors")
-    .update({ updatedAt: new Date().toISOString() })
+    .update({ profileImageUploadId: upload.id, updatedAt: new Date().toISOString() })
     .eq("userId", userId);
-  return publicUrl;
+  if (error) {
+    await deleteUpload(upload.id).catch(() => {});
+    throw error;
+  }
+  if (replaceUploadId && replaceUploadId !== upload.id) {
+    try {
+      await deleteUpload(replaceUploadId);
+    } catch {
+      return { ...upload, cleanupPending: true };
+    }
+  }
+  return upload;
 }
 
-// ─── PAYMENT PROOF UPLOAD ──────────────────────────────────────────────────────
-
-export async function uploadPaymentProof(userId: string, imageUri: string): Promise<string> {
-  const ext = imageUri.split(".").pop()?.split("?")[0] ?? "jpg";
-  const fileName = `payment_proofs/${userId}_${Date.now()}.${ext}`;
-  const { publicUrl } = await uploadFile(
-    "payment-proofs",
-    fileName,
-    { uri: imageUri, type: `image/${ext}` },
-    `image/${ext}`
+export async function uploadPaymentProof(
+  userId: string,
+  imageUri: string,
+  fileName = "payment-proof.jpg",
+  mimeType = "image/jpeg",
+  appointmentId?: string
+): Promise<StoredUpload> {
+  return uploadCategorizedFile(
+    userId,
+    "payment_proof",
+    { uri: imageUri, name: fileName, type: mimeType },
+    { relatedTable: "appointments", relatedId: appointmentId }
   );
-  return publicUrl;
 }
-
-// ─── MEDICAL LICENSE UPLOAD ────────────────────────────────────────────────────
 
 export async function uploadMedicalLicense(
   userId: string,
-  file: { name: string; type: string; uri: string }
-): Promise<string> {
-  const fileName = `${userId}/license_${Date.now()}_${file.name}`;
-  const { path } = await uploadFile("medical-licenses", fileName, file, file.type);
-  await supabase
+  file: { name: string; type: string; uri: string; size?: number }
+): Promise<StoredUpload> {
+  const { data: previous } = await supabase
+    .from("user_uploads")
+    .select("id")
+    .eq("owner_id", userId)
+    .eq("category", "provider_license")
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const upload = await uploadCategorizedFile(userId, "provider_license", file, {
+    relatedTable: "doctors",
+    relatedId: userId,
+  });
+  const { error } = await supabase
     .from("doctors")
     .update({
-      licenseFile: { path, name: file.name, type: file.type },
+      licenseUploadId: upload.id,
+      licenseFile: { uploadId: upload.id, path: upload.storagePath, name: upload.originalName, type: upload.mimeType },
       updatedAt: new Date().toISOString(),
     })
     .eq("userId", userId);
-  return path;
+  if (error) {
+    await deleteUpload(upload.id).catch(() => {});
+    throw error;
+  }
+  if (previous?.id && previous.id !== upload.id) {
+    try {
+      await deleteUpload(previous.id);
+    } catch {
+      return { ...upload, cleanupPending: true };
+    }
+  }
+  return upload;
 }
-
-// ─── CERTIFICATE UPLOAD ───────────────────────────────────────────────────────
 
 export async function uploadCertificate(
   userId: string,
-  file: { name: string; type: string; uri: string }
-): Promise<{ path: string; publicUrl: string }> {
-  const ext = file.name.split(".").pop() ?? "pdf";
-  const fileName = `${userId}/certificate_${Date.now()}.${ext}`;
-  return uploadFile("medical-licenses", `certificates/${fileName}`, file, file.type);
+  file: { name: string; type: string; uri: string; size?: number }
+): Promise<StoredUpload> {
+  return uploadCategorizedFile(userId, "certificate", file, { relatedTable: "doctors", relatedId: userId });
 }
 
 // ─── APPOINTMENTS ─────────────────────────────────────────────────────────────
@@ -416,6 +668,7 @@ export async function uploadCertificate(
 // patientId, doctorId, doctorUserId, doctorName, serviceType, consultationFee, etc.
 
 export async function createAppointment(appt: {
+  id?: string;
   patientId: string;
   patientName?: string;
   patientEmail?: string;
@@ -432,6 +685,7 @@ export async function createAppointment(appt: {
   telebirrMerchant?: string;
   cbeAccount?: string;
   paymentProofUrl?: string;
+  paymentProofUploadId?: string;
   paymentMethod?: string;
   transactionId?: string;
   senderName?: string;
@@ -531,54 +785,56 @@ export async function submitRadiologyCase(caseData: {
   body_part: string;
   urgency: string;
   symptoms?: string;
+  assigned_radiologist_id: string;
   assigned_radiologist_name?: string;
   scan_image_uri?: string | null;
+  scan_image_name?: string | null;
+  scan_image_type?: string | null;
   /** MP4 or other video file URI to upload alongside or instead of the image */
   scan_video_uri?: string | null;
   /** Original filename of the video (used for extension detection) */
   scan_video_name?: string | null;
+  scan_video_type?: string | null;
 }) {
-  let fileUrl: string | null = null;
-
-  // Upload image scan (if provided)
-  if (caseData.scan_image_uri) {
-    try {
-      const ext = caseData.scan_image_uri.split(".").pop()?.split("?")[0] ?? "jpg";
-      const fileName = `${caseData.submitted_by}/${Date.now()}_scan.${ext}`;
-      const { path } = await uploadFile(
-        "radiology-scans",
-        fileName,
-        { uri: caseData.scan_image_uri, type: `image/${ext}` },
-        `image/${ext}`
-      );
-      fileUrl = path;
-    } catch {}
+  const recordId = Crypto.randomUUID();
+  const { data: assignedReviewer, error: reviewerError } = await supabase
+    .from("doctors")
+    .select("userId")
+    .eq("userId", caseData.assigned_radiologist_id)
+    .eq("status", "Active")
+    .or("specialty.ilike.%radio%,providerType.ilike.%radio%")
+    .maybeSingle();
+  if (reviewerError || !assignedReviewer) {
+    throw new Error("The selected radiologist is not currently authorized to review scans.");
   }
-
-  // Upload video scan (MP4 / video/*) — overwrites fileUrl so the video is the primary attachment
-  if (caseData.scan_video_uri) {
-    try {
-      const ext = (caseData.scan_video_name ?? caseData.scan_video_uri).split(".").pop()?.split("?")[0] ?? "mp4";
-      const contentType = ext === "mp4" ? "video/mp4" : `video/${ext}`;
-      const fileName = `${caseData.submitted_by}/${Date.now()}_scan.${ext}`;
-      const { path } = await uploadFile(
-        "radiology-scans",
-        fileName,
-        { uri: caseData.scan_video_uri, name: caseData.scan_video_name ?? `scan.${ext}`, type: contentType },
-        contentType
-      );
-      fileUrl = path;
-    } catch {}
-  }
+  const sourceUri = caseData.scan_video_uri || caseData.scan_image_uri;
+  if (!sourceUri) throw new Error("A radiology image, PDF, or video is required.");
+  const isVideo = Boolean(caseData.scan_video_uri);
+  const originalName = isVideo
+    ? caseData.scan_video_name || "radiology-scan.mp4"
+    : caseData.scan_image_name || sourceUri.split("/").pop()?.split("?")[0] || "radiology-scan.jpg";
+  const upload = await uploadCategorizedFile(
+    caseData.submitted_by,
+    isVideo ? "radiology_video" : "radiology_image",
+    {
+      uri: sourceUri,
+      name: originalName,
+      type: isVideo ? caseData.scan_video_type || "video/mp4" : caseData.scan_image_type || undefined,
+    },
+    { relatedTable: "medicalRecords", relatedId: recordId }
+  );
 
   const { data, error } = await supabase
     .from("medicalRecords")
     .insert({
+      id: recordId,
       patientId: caseData.submitted_by,
       providerUserId: caseData.submitted_by,
-      type: "image",
+      type: isVideo ? "video" : "image",
       title: `${caseData.scan_type} — ${caseData.body_part}`,
-      fileUrl,
+      fileUrl: upload.storagePath,
+      fileUploadId: upload.id,
+      assignedRadiologistId: caseData.assigned_radiologist_id,
       patientName: caseData.patient_name,
       consultationType: caseData.scan_type,
       notes: [
@@ -595,8 +851,11 @@ export async function submitRadiologyCase(caseData: {
     })
     .select()
     .single();
-  if (error) throw error;
-  return data;
+  if (error) {
+    await deleteUpload(upload.id).catch(() => {});
+    throw error;
+  }
+  return { ...data, fileUrl: upload.signedUrl };
 }
 
 export async function getRadiologyCases(userId: string) {
@@ -604,10 +863,14 @@ export async function getRadiologyCases(userId: string) {
     .from("medicalRecords")
     .select("*")
     .eq("patientId", userId)
-    .eq("type", "image")
+    .in("type", ["image", "video"])
     .order("createdAt", { ascending: false });
   if (error) throw error;
-  return data ?? [];
+  return Promise.all((data ?? []).map(async (row: any) => {
+    if (!row.fileUploadId) return row;
+    const file = await getSignedUploadDetails(row.fileUploadId).catch(() => null);
+    return { ...row, fileUrl: file?.url ?? null, fileMimeType: file?.mimeType ?? null };
+  }));
 }
 
 /** Shape the radiology queue list + detail UI expects */
@@ -623,6 +886,7 @@ export interface RadioCase {
   impression: string;
   recommendations: string;
   fileUrl?: string | null;
+  fileType?: "image" | "video" | "pdf" | "unknown";
 }
 
 function parseNote(notes: string | null | undefined, key: string): string {
@@ -669,17 +933,32 @@ function dbRowToRadioCase(row: Record<string, any>): RadioCase {
     impression,
     recommendations,
     fileUrl: row.fileUrl ?? null,
+    fileType: row.fileMimeType === "application/pdf"
+      ? "pdf"
+      : row.fileMimeType?.startsWith("video/") || row.type === "video"
+        ? "video"
+        : "image",
   };
 }
 
-export async function getRadiologyQueue(_radiologistId: string): Promise<RadioCase[]> {
+export async function getRadiologyQueue(radiologistId: string): Promise<RadioCase[]> {
   const { data, error } = await supabase
     .from("medicalRecords")
     .select("*")
-    .eq("type", "image")
+    .eq("assignedRadiologistId", radiologistId)
+    .in("type", ["image", "video"])
     .order("createdAt", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map(dbRowToRadioCase);
+  return Promise.all((data ?? []).map(async (row: any) => {
+    const file = row.fileUploadId
+      ? await getSignedUploadDetails(row.fileUploadId).catch(() => null)
+      : null;
+    return dbRowToRadioCase({
+      ...row,
+      fileUrl: file?.url ?? null,
+      fileMimeType: file?.mimeType ?? null,
+    });
+  }));
 }
 
 export async function submitRadiologyReport(report: {
@@ -704,7 +983,10 @@ export async function submitRadiologyReport(report: {
       providerUserId: report.radiologist_id,
       updatedAt: new Date().toISOString(),
     })
-    .eq("id", report.case_id);
+    .eq("id", report.case_id)
+    .eq("assignedRadiologistId", report.radiologist_id)
+    .select("id")
+    .single();
   if (error) throw error;
   return { id: report.case_id };
 }
@@ -714,7 +996,7 @@ export async function getRadiologyReports(userId: string) {
     .from("medicalRecords")
     .select("*")
     .eq("patientId", userId)
-    .eq("type", "image")
+    .in("type", ["image", "video"])
     .not("summary", "eq", "pending")
     .order("updatedAt", { ascending: false });
   if (error) throw error;
@@ -897,6 +1179,7 @@ export interface Institution {
   /** Uploaded license file URL. Saved to `licenseNo` if a dedicated `licenseUrl` column does not exist yet. */
   licenseUrl?: string;
   licenseNo?: string;
+  licenseUploadId?: string;
   totalDoctors?: number;
   totalBeds?: number;
   accreditations?: any;
@@ -991,14 +1274,8 @@ export async function upsertInstitution(inst: Institution) {
     totalBeds: inst.totalBeds ?? null,
   };
   if (inst.id) payload.id = inst.id;
-  // Store the uploaded license URL. The real table currently has `licenseNo`
-  // (text) as the only license-related column. Save the URL there until a
-  // dedicated `licenseUrl` column is added via Supabase → SQL Editor:
-  //   ALTER TABLE public.institute_pulse ADD COLUMN "licenseUrl" TEXT;
-  const licenseUrl = inst.licenseUrl ?? inst.licenseNo;
-  if (licenseUrl) {
-    payload.licenseNo = licenseUrl;
-  }
+  if (inst.licenseNo) payload.licenseNo = inst.licenseNo;
+  if (inst.licenseUploadId) payload.licenseUploadId = inst.licenseUploadId;
   const { error } = await supabase
     .from("institute_pulse")
     .upsert(payload, { onConflict: "userId" });
@@ -1007,13 +1284,22 @@ export async function upsertInstitution(inst: Institution) {
 
 export async function uploadInstituteLicense(
   userId: string,
-  file: { name: string; uri: string; type: string }
-): Promise<string> {
-  if (file.uri === "mock://license") return "";
-  const ext = file.name.split(".").pop() ?? "pdf";
-  const path = `institute-licenses/${userId}/license_${Date.now()}.${ext}`;
-  const { publicUrl } = await uploadFile("medical-licenses", path, file, file.type);
-  return publicUrl;
+  file: { name: string; uri: string; type: string; size?: number }
+): Promise<StoredUpload> {
+  const { data: previous } = await supabase
+    .from("user_uploads")
+    .select("id")
+    .eq("owner_id", userId)
+    .eq("category", "institute_license")
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const upload = await uploadCategorizedFile(userId, "institute_license", file, {
+    relatedTable: "institute_pulse",
+    relatedId: userId,
+  });
+  return { ...upload, replacedUploadId: previous?.id };
 }
 
 // ─── EMERGENCY CONTACTS ───────────────────────────────────────────────────────

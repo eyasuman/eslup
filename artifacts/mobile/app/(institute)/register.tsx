@@ -22,6 +22,7 @@ import {
   signIn,
   upsertInstitution,
   uploadInstituteLicense,
+  deleteUpload,
   createNotification,
 } from "@/lib/supabase";
 
@@ -164,9 +165,9 @@ export default function InstituteRegisterScreen() {
       }
 
       // 2. Upload licence file (real file, not mock)
-      let licenseUrl = "";
+      let licenseUpload: Awaited<ReturnType<typeof uploadInstituteLicense>> | null = null;
       if (licenseFile) {
-        try { licenseUrl = await uploadInstituteLicense(userId, licenseFile); } catch (err: any) {
+        try { licenseUpload = await uploadInstituteLicense(userId, licenseFile); } catch (err: any) {
           Alert.alert("License upload failed", err?.message ?? "Could not upload the licence file. Please try again.");
           setLoading(false);
           return;
@@ -174,18 +175,36 @@ export default function InstituteRegisterScreen() {
       }
 
       // 3. Save institute record to Supabase (only real institute_pulse columns)
-      await upsertInstitution({
-        userId,
-        name: form.name,
-        type: category ?? "Other",
-        email: form.email,
-        phone: form.phone,
-        address: form.address || undefined,
-        city: form.city,
-        status: "Pending",
-        licenseUrl: licenseUrl || undefined,
-        services: [],
-      });
+      try {
+        await upsertInstitution({
+          userId,
+          name: form.name,
+          type: category ?? "Other",
+          email: form.email,
+          phone: form.phone,
+          address: form.address || undefined,
+          city: form.city,
+          status: "Pending",
+          licenseUploadId: licenseUpload?.id,
+          services: [],
+        });
+      } catch (error) {
+        if (licenseUpload) await deleteUpload(licenseUpload.id).catch(() => {});
+        throw error;
+      }
+      if (licenseUpload?.replacedUploadId) {
+        try {
+          await deleteUpload(licenseUpload.replacedUploadId);
+        } catch {
+          licenseUpload.cleanupPending = true;
+        }
+      }
+      if (licenseUpload?.cleanupPending) {
+        Alert.alert(
+          "License Updated",
+          "Your new license was saved. Cleanup of the previous file is queued and will retry automatically."
+        );
+      }
 
       // 4. Welcome notification
       try {

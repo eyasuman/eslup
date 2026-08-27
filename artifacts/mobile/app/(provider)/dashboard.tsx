@@ -34,6 +34,8 @@ import {
   updateDoctorHospital,
   signOut as supabaseSignOut,
   uploadProfileImage,
+  uploadCertificate,
+  getSignedUploadUrl,
   submitRadiologyReport,
   submitRadiologyCase,
   getRadiologyQueue,
@@ -57,13 +59,6 @@ const STATUS_COLORS: Record<string, string> = {
   new: "#315d93", pending: "#D97706", accepted: "#059669",
   completed: "#64748B", cancelled: "#DC2626", declined: "#DC2626",
 };
-
-const MOCK_RADIOLOGY_CASES = [
-  { id: "rc1", patient: "Abebe Girma", age: 45, scan: "Chest X-Ray", urgency: "routine", status: "pending", submitted: "2 hours ago", findings: "", impression: "", recommendations: "" },
-  { id: "rc2", patient: "Fatima Yusuf", age: 32, scan: "Brain MRI", urgency: "emergency", status: "in_review", submitted: "30 min ago", findings: "", impression: "", recommendations: "" },
-  { id: "rc3", patient: "Daniel Bekele", age: 58, scan: "CT Abdomen", urgency: "priority", status: "completed", submitted: "Yesterday", findings: "Mild hepatomegaly noted. No acute pathology.", impression: "Mild fatty liver disease.", recommendations: "Follow up in 3 months with LFT." },
-  { id: "rc4", patient: "Sara Haile", age: 27, scan: "Pelvic Ultrasound", urgency: "routine", status: "pending", submitted: "1 hour ago", findings: "", impression: "", recommendations: "" },
-];
 
 const URGENCY_COLOR: Record<string, string> = { routine: "#059669", priority: "#D97706", emergency: "#DC2626" };
 const STATUS_LABEL: Record<string, string> = { pending: "Pending", in_review: "In Review", completed: "Completed" };
@@ -92,6 +87,8 @@ export default function ProviderDashboard() {
   const [activeSchedule, setActiveSchedule] = useState<string[]>(["Mon", "Tue", "Wed", "Thu", "Fri"]);
   const [serviceRangeKm, setServiceRangeKm] = useState(10);
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [certificateUploading, setCertificateUploading] = useState(false);
+  const [certificateName, setCertificateName] = useState("");
   const [locationLoading, setLocationLoading] = useState(false);
   const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedArea, setSelectedArea] = useState("Bole");
@@ -104,8 +101,7 @@ export default function ProviderDashboard() {
     { id: "evening", label: "Evening", active: false, from: "7:00 PM", to: "9:00 PM", editingFrom: false, editingTo: false },
   ]);
 
-  // Radiologist review — seeded with mock data; replaced by Supabase fetch on mount
-  const [radioCases, setRadioCases] = useState<RadioCase[]>(MOCK_RADIOLOGY_CASES);
+  const [radioCases, setRadioCases] = useState<RadioCase[]>([]);
 
   // ── Working institute state ────────────────────────────────────────────────
   const [currentHospital, setCurrentHospital] = useState("");
@@ -171,6 +167,12 @@ export default function ProviderDashboard() {
   useEffect(() => {
     if (user?.doctorStatus) setDoctorStatus(user.doctorStatus);
   }, [user?.doctorStatus]);
+
+  useEffect(() => {
+    const uploadId = (user as any)?.profileImageUploadId;
+    if (!uploadId) return;
+    getSignedUploadUrl(uploadId).then(setProfileImage).catch(() => {});
+  }, [user?.id, (user as any)?.profileImageUploadId]);
 
   // Parse working institute from bio on mount ("HospitalName · languages")
   useEffect(() => {
@@ -246,17 +248,28 @@ export default function ProviderDashboard() {
       if (!perm.granted) { Alert.alert("Permission needed", "Gallery access is required to upload a profile picture."); return; }
       const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.9, allowsEditing: true, aspect: [1, 1], mediaTypes: ImagePicker.MediaTypeOptions.Images });
       if (!result.canceled && result.assets[0]) {
-        const uri = result.assets[0].uri;
-        setProfileImage(uri);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        // Upload to Supabase Storage in background
+        const asset = result.assets[0];
+        const uri = asset.uri;
         if (user?.id) {
           try {
-            const publicUrl = await uploadProfileImage(user.id, uri);
-            // Update local user avatar
-            setProfileImage(publicUrl);
-          } catch {
-            // Keep local preview even if upload fails
+            const upload = await uploadProfileImage(
+              user.id,
+              uri,
+              (user as any)?.profileImageUploadId,
+              asset.fileName ?? "profile-image.jpg",
+              asset.mimeType ?? "image/jpeg"
+            );
+            setProfileImage(upload.signedUrl);
+            await setUser({ ...user, avatar: upload.signedUrl, profileImageUploadId: upload.id } as any);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            if (upload.cleanupPending) {
+              Alert.alert(
+                "Profile Photo Updated",
+                "Your new photo was saved. Cleanup of the previous file is queued and will retry automatically."
+              );
+            }
+          } catch (error: any) {
+            Alert.alert("Upload Failed", error?.message ?? "Your profile image could not be saved. Please try again.");
           }
         }
       }
@@ -372,9 +385,14 @@ export default function ProviderDashboard() {
         body_part: caseForm.body_part.trim(),
         urgency: caseForm.urgency,
         symptoms: caseForm.symptoms.trim() || undefined,
+        assigned_radiologist_id: user.id,
+        assigned_radiologist_name: user.name,
         scan_image_uri: (!scanFile.isVideo) ? scanFile.uri : null,
+        scan_image_name: !scanFile.isVideo ? scanFile.name : null,
+        scan_image_type: !scanFile.isVideo ? scanFile.type : null,
         scan_video_uri: scanFile.isVideo ? scanFile.uri : null,
         scan_video_name: scanFile.isVideo ? scanFile.name : null,
+        scan_video_type: scanFile.isVideo ? scanFile.type : null,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Case Submitted", `Radiology case for ${caseForm.patient_name} has been submitted and will appear in the review queue.`, [
@@ -391,36 +409,58 @@ export default function ProviderDashboard() {
     }
   };
 
+  const handleCertificateUpload = async () => {
+    if (!user?.id) return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*"],
+        copyToCacheDirectory: true,
+      });
+      const asset = result.assets?.[0];
+      if (!asset) return;
+      setCertificateUploading(true);
+      await uploadCertificate(user.id, {
+        uri: asset.uri,
+        name: asset.name,
+        type: asset.mimeType ?? "application/octet-stream",
+        size: asset.size,
+      });
+      setCertificateName(asset.name);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Certificate Stored", "Your certificate was uploaded to private storage.");
+    } catch (error: any) {
+      Alert.alert("Upload Failed", error?.message ?? "The certificate could not be stored.");
+    } finally {
+      setCertificateUploading(false);
+    }
+  };
+
   const handleSubmitRadiologyReport = async () => {
     if (!selectedCase) return;
     if (!radioFindings.trim() || !radioImpression.trim()) {
       Alert.alert("Missing Fields", "Please fill in Findings and Impression before generating the report.");
       return;
     }
+    if (!user?.id) return;
+    try {
+      await submitRadiologyReport({
+        case_id: selectedCase.id,
+        radiologist_id: user.id,
+        radiologist_name: user.name ?? "Dr. Provider",
+        findings: radioFindings.trim(),
+        impression: radioImpression.trim(),
+        recommendations: radioRecommendations.trim() || undefined,
+      });
+    } catch (error: any) {
+      Alert.alert("Report Failed", error?.message ?? "The report could not be saved. Please try again.");
+      return;
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    // Update local state immediately
     setRadioCases((prev) => prev.map((c) =>
       c.id === selectedCase.id
         ? { ...c, status: "completed", findings: radioFindings, impression: radioImpression, recommendations: radioRecommendations }
         : c
     ));
-
-    // Save to Supabase in background
-    if (user?.id) {
-      try {
-        await submitRadiologyReport({
-          case_id: selectedCase.id,
-          radiologist_id: user.id,
-          radiologist_name: user.name ?? "Dr. Provider",
-          findings: radioFindings.trim(),
-          impression: radioImpression.trim(),
-          recommendations: radioRecommendations.trim() || undefined,
-        });
-      } catch {
-        // Report saved locally — will sync when online
-      }
-    }
 
     Alert.alert(
       "Report Generated & Sent",
@@ -907,6 +947,25 @@ export default function ProviderDashboard() {
               </View>
               <Switch value={online} onValueChange={toggleOnline} trackColor={{ false: "#64748B", true: "#059669" }} thumbColor="#fff" />
             </View>
+            <Text style={[styles.sectionTitle, { color: textPrimary, marginTop: 12 }]}>Professional Credentials</Text>
+            <Pressable
+              onPress={handleCertificateUpload}
+              disabled={certificateUploading}
+              style={[styles.serviceRow, { backgroundColor: cardBg, borderColor: borderCol, opacity: certificateUploading ? 0.6 : 1 }]}
+            >
+              <View style={[styles.svcIcon, { backgroundColor: "#315d93" + "15" }]}>
+                <Feather name="award" size={20} color="#315d93" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.svcLabel, { color: textPrimary }]}>
+                  {certificateUploading ? "Uploading certificate…" : "Upload Certificate"}
+                </Text>
+                <Text style={[styles.svcDesc, { color: textMuted }]}>
+                  {certificateName || "PDF or image, up to 15 MB"}
+                </Text>
+              </View>
+              <Feather name="upload-cloud" size={18} color="#315d93" />
+            </Pressable>
             <View style={[styles.disclaimerBox, { backgroundColor: "#D97706" + "10", borderColor: "#D97706" + "30" }]}>
               <Feather name="shield" size={14} color="#D97706" />
               <Text style={[styles.disclaimerText, { color: textMuted }]}>
@@ -1133,9 +1192,9 @@ export default function ProviderDashboard() {
                   onPress={() => {
                     const url = selectedCase.fileUrl;
                     if (!url) return;
-                    if (url.toLowerCase().endsWith(".mp4") || url.toLowerCase().startsWith("video")) {
+                    if (selectedCase.fileType === "video") {
                       setFullScreenMedia({ uri: url, type: "video" });
-                    } else if (url.toLowerCase().endsWith(".pdf")) {
+                    } else if (selectedCase.fileType === "pdf") {
                       setFullScreenMedia({ uri: url, type: "pdf" });
                     } else {
                       setFullScreenMedia({ uri: url, type: "image" });
@@ -1144,7 +1203,7 @@ export default function ProviderDashboard() {
                   style={[styles.scanViewer, { backgroundColor: "#050D18" }]}
                 >
                   {selectedCase.fileUrl ? (
-                    selectedCase.fileUrl.toLowerCase().endsWith(".mp4") ? (
+                    selectedCase.fileType === "video" ? (
                       <Video
                         source={{ uri: selectedCase.fileUrl }}
                         style={{ width: "100%", height: "100%" }}

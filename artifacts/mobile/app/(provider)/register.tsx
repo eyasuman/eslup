@@ -92,10 +92,6 @@ export default function ProviderRegisterScreen() {
 
   const pickDocument = async () => {
     try {
-      if (Platform.OS === "web") {
-        setLicenseFile({ name: "medical_license.pdf", uri: "mock://license", type: "application/pdf" });
-        return;
-      }
       const result = await DocumentPicker.getDocumentAsync({
         type: ["application/pdf", "image/jpeg", "image/png", "image/jpg"],
         copyToCacheDirectory: true,
@@ -142,8 +138,13 @@ export default function ProviderRegisterScreen() {
       serviceModes: { video: true, audio: false, inPerson: true, homeVisit: false },
       availability: [],
     });
-    if (licenseFile && licenseFile.uri !== "mock://license") {
-      try { await uploadMedicalLicense(userId, licenseFile); } catch {}
+    if (!licenseFile) throw new Error("A medical license is required.");
+    const licenseUpload = await uploadMedicalLicense(userId, licenseFile);
+    if (licenseUpload.cleanupPending) {
+      Alert.alert(
+        "License Updated",
+        "Your new license was saved. Cleanup of the previous file is queued and will retry automatically."
+      );
     }
     try {
       await createNotification({

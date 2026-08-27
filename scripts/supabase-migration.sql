@@ -3,6 +3,163 @@
 -- Run this in: Supabase Dashboard → SQL Editor → New Query
 -- ============================================================
 
+-- ── Categorized private uploads ──────────────────────────────
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('user-uploads', 'user-uploads', FALSE, 209715200)
+ON CONFLICT (id) DO UPDATE
+SET public = FALSE, file_size_limit = EXCLUDED.file_size_limit;
+
+CREATE TABLE IF NOT EXISTS public.user_uploads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  category TEXT NOT NULL CHECK (category IN (
+    'profile_image', 'payment_proof', 'provider_license', 'institute_license',
+    'certificate', 'radiology_image', 'radiology_video'
+  )),
+  bucket TEXT NOT NULL DEFAULT 'user-uploads' CHECK (bucket = 'user-uploads'),
+  storage_path TEXT NOT NULL UNIQUE,
+  original_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes BIGINT NOT NULL CHECK (size_bytes > 0 AND size_bytes <= 209715200),
+  related_table TEXT,
+  related_id TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'deletion_pending', 'deleted')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+ALTER TABLE public.user_uploads
+  DROP CONSTRAINT IF EXISTS user_uploads_status_check;
+ALTER TABLE public.user_uploads
+  ADD CONSTRAINT user_uploads_status_check
+  CHECK (status IN ('active', 'deletion_pending', 'deleted'));
+
+ALTER TABLE IF EXISTS public."medicalRecords"
+  ADD COLUMN IF NOT EXISTS "fileUploadId" UUID REFERENCES public.user_uploads(id),
+  ADD COLUMN IF NOT EXISTS "assignedRadiologistId" TEXT;
+
+CREATE INDEX IF NOT EXISTS user_uploads_owner_category_idx
+  ON public.user_uploads (owner_id, category, created_at DESC);
+CREATE INDEX IF NOT EXISTS user_uploads_related_idx
+  ON public.user_uploads (related_table, related_id)
+  WHERE status = 'active';
+
+ALTER TABLE public.user_uploads ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION public.can_access_radiology_upload(upload_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public."medicalRecords" mr
+    WHERE mr."fileUploadId" = upload_id
+      AND mr."assignedRadiologistId" = auth.uid()::TEXT
+      AND EXISTS (
+        SELECT 1
+        FROM public.doctors d
+        WHERE d."userId" = auth.uid()::TEXT
+          AND d.status = 'Active'
+          AND (d.specialty ILIKE '%radio%' OR d."providerType" ILIKE '%radio%')
+      )
+  );
+$$;
+REVOKE ALL ON FUNCTION public.can_access_radiology_upload(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.can_access_radiology_upload(UUID) TO authenticated;
+
+DROP POLICY IF EXISTS user_uploads_owner_select ON public.user_uploads;
+DROP POLICY IF EXISTS user_uploads_owner_insert ON public.user_uploads;
+DROP POLICY IF EXISTS user_uploads_owner_update ON public.user_uploads;
+DROP POLICY IF EXISTS user_uploads_radiologist_select ON public.user_uploads;
+DROP POLICY IF EXISTS user_uploads_service_role ON public.user_uploads;
+
+CREATE POLICY "user_uploads_owner_select" ON public.user_uploads
+  FOR SELECT USING (owner_id = auth.uid());
+CREATE POLICY "user_uploads_owner_insert" ON public.user_uploads
+  FOR INSERT WITH CHECK (owner_id = auth.uid() AND split_part(storage_path, '/', 1) = auth.uid()::TEXT);
+CREATE POLICY "user_uploads_owner_update" ON public.user_uploads
+  FOR UPDATE USING (owner_id = auth.uid()) WITH CHECK (owner_id = auth.uid());
+CREATE POLICY "user_uploads_radiologist_select" ON public.user_uploads
+  FOR SELECT USING (
+    category IN ('radiology_image', 'radiology_video')
+    AND public.can_access_radiology_upload(id)
+  );
+CREATE POLICY "user_uploads_service_role" ON public.user_uploads
+  FOR ALL USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+
+DROP POLICY IF EXISTS user_uploads_objects_insert ON storage.objects;
+DROP POLICY IF EXISTS user_uploads_objects_select ON storage.objects;
+DROP POLICY IF EXISTS user_uploads_objects_delete ON storage.objects;
+
+CREATE POLICY "user_uploads_objects_insert" ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'user-uploads' AND split_part(name, '/', 1) = auth.uid()::TEXT);
+CREATE POLICY "user_uploads_objects_select" ON storage.objects
+  FOR SELECT TO authenticated
+  USING (
+    bucket_id = 'user-uploads'
+    AND (
+      split_part(name, '/', 1) = auth.uid()::TEXT
+      OR (
+        split_part(name, '/', 2) IN ('radiology_image', 'radiology_video')
+        AND EXISTS (
+          SELECT 1
+          FROM public.user_uploads u
+          WHERE u.storage_path = storage.objects.name
+            AND public.can_access_radiology_upload(u.id)
+        )
+      )
+    )
+  );
+CREATE POLICY "user_uploads_objects_delete" ON storage.objects
+  FOR DELETE TO authenticated
+  USING (bucket_id = 'user-uploads' AND split_part(name, '/', 1) = auth.uid()::TEXT);
+
+ALTER TABLE IF EXISTS public.doctors
+  ADD COLUMN IF NOT EXISTS "profileImageUploadId" UUID REFERENCES public.user_uploads(id),
+  ADD COLUMN IF NOT EXISTS "licenseUploadId" UUID REFERENCES public.user_uploads(id);
+ALTER TABLE IF EXISTS public.institute_pulse
+  ADD COLUMN IF NOT EXISTS "licenseUploadId" UUID REFERENCES public.user_uploads(id);
+ALTER TABLE IF EXISTS public.appointments
+  ADD COLUMN IF NOT EXISTS "paymentProofUploadId" UUID REFERENCES public.user_uploads(id);
+CREATE OR REPLACE FUNCTION public.enforce_user_upload_update()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.role() = 'service_role' THEN RETURN NEW; END IF;
+  IF NEW.owner_id IS DISTINCT FROM OLD.owner_id
+    OR NEW.category IS DISTINCT FROM OLD.category
+    OR NEW.bucket IS DISTINCT FROM OLD.bucket
+    OR NEW.storage_path IS DISTINCT FROM OLD.storage_path
+    OR NEW.original_name IS DISTINCT FROM OLD.original_name
+    OR NEW.mime_type IS DISTINCT FROM OLD.mime_type
+    OR NEW.size_bytes IS DISTINCT FROM OLD.size_bytes
+    OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+    RAISE EXCEPTION 'Upload identity and file metadata are immutable';
+  END IF;
+  IF OLD.status = 'deleted' AND NEW.status <> 'deleted' THEN
+    RAISE EXCEPTION 'Deleted uploads cannot be restored';
+  END IF;
+  IF OLD.status = 'deletion_pending' AND NEW.status NOT IN ('deletion_pending', 'deleted') THEN
+    RAISE EXCEPTION 'Uploads pending deletion cannot be restored';
+  END IF;
+  IF NEW.status = 'deleted' AND NEW.deleted_at IS NULL THEN
+    RAISE EXCEPTION 'deleted_at is required for deleted uploads';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS user_uploads_enforce_update ON public.user_uploads;
+CREATE TRIGGER user_uploads_enforce_update
+  BEFORE UPDATE ON public.user_uploads
+  FOR EACH ROW EXECUTE FUNCTION public.enforce_user_upload_update();
+
 -- ── Institutions (Hospitals & Clinics) ──────────────────────
 CREATE TABLE IF NOT EXISTS institutions (
   id           TEXT PRIMARY KEY,
@@ -25,6 +182,8 @@ CREATE TABLE IF NOT EXISTS institutions (
 
 -- Enable row-level security (read-only for all authenticated users)
 ALTER TABLE institutions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS institutions_select ON institutions;
+DROP POLICY IF EXISTS institutions_service_role ON institutions;
 CREATE POLICY "institutions_select" ON institutions FOR SELECT USING (true);
 CREATE POLICY "institutions_service_role" ON institutions FOR ALL USING (auth.role() = 'service_role');
 
@@ -39,6 +198,8 @@ CREATE TABLE IF NOT EXISTS emergency_contacts (
 );
 
 ALTER TABLE emergency_contacts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS emergency_contacts_select ON emergency_contacts;
+DROP POLICY IF EXISTS emergency_contacts_service_role ON emergency_contacts;
 CREATE POLICY "emergency_contacts_select" ON emergency_contacts FOR SELECT USING (true);
 CREATE POLICY "emergency_contacts_service_role" ON emergency_contacts FOR ALL USING (auth.role() = 'service_role');
 
