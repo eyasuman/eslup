@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "c6229bad-d945-44b6-8771-12a13a4946a0"
+      }
+    },
+    "android": {
+      "package": "com.the_god_of_monarch.workspace"
+    },
+    "ios": {
+      "bundleIdentifier": "pulse",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}
