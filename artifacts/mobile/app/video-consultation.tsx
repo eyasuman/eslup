@@ -83,13 +83,15 @@ export default function VideoConsultationScreen() {
     return Boolean(camera?.granted && microphone?.granted);
   };
   const startSession = useCallback(async (acceptedCallId?: string) => {
-    if (!appointmentId) return;
+    const activeCallId = acceptedCallId ?? callId;
+    if (!appointmentId || !activeCallId) {
+      setError("An accepted video invitation is required to start the session.");
+      setPhase("media");
+      return;
+    }
     setError(null); setPhase("joining");
     try {
-      const body = await createVideoSession({
-        appointmentId,
-        ...((acceptedCallId ?? callId) ? { callId: acceptedCallId ?? callId } : {}),
-      });
+      const body = await createVideoSession({ appointmentId, callId: activeCallId });
       setSession(body);
       setPhase("call");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to start the video session."); setPhase("media"); }
