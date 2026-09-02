@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "d1f0cb4e-ff49-4a00-b0b9-aba4e6ba1440"
+      }
+    },
+    "android": {
+      "package": "com.the_god_of_monarch.workspace"
+    }
+  }
+}
