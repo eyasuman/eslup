@@ -40,11 +40,3 @@ type = "audio"
 title = "Pulse Health closing narration"
 description = "Text-to-speech audio: One connected network, built for better access to care. Pulse Health. Patients, professionals, and institutes, moving health forward together."
 logical_id = "fffa8f56-129c-49fe-9817-158af32ae6b4"
-
-[[outputs]]
-id = "yQVRQVl54-16ZMm62Rex7"
-uri = "file://artifacts/pulse-health-video/public/audio/vo_scene7.mp3"
-type = "audio"
-title = "Institute workflow narration"
-description = "Text-to-speech audio: Institutes can register with their license, follow approval status in real time, and manage profiles, clinical capacity, locations, and available services with clarity."
-logical_id = "0974d9fd-beaf-4e87-80d4-c94d0096ba61"
