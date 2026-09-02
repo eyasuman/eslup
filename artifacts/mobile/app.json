@@ -4,6 +4,11 @@
     "slug": "mobile",
     "owner": "zero_to_monarch",
     "version": "1.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "1ccc71cb-a8be-4a2e-86f5-97b66dd11a02"
+      }
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mobile",
