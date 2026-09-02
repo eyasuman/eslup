@@ -1,4 +1,4 @@
 #!/bin/bash
-set -e
-pnpm install --frozen-lockfile
-pnpm --filter db push
+set -euo pipefail
+
+CI=1 pnpm install --frozen-lockfile --prefer-offline
