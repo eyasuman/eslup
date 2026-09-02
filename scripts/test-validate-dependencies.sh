@@ -73,4 +73,38 @@ assert_contains "$ordinary_validation_output" 'ERR_PNPM_FETCH_500 GET https://re
 assert_contains "$ordinary_validation_output" \
   'Dependency validation failed: pnpm install --frozen-lockfile exited with status 23.'
 
+cat > "$fake_pnpm_dir/pnpm" <<'EOF'
+#!/usr/bin/env bash
+
+printf '%s\n' \
+  'ERR_PNPM_FETCH_500 GET https://registry.example.com/@workspace/first-package/-/first-package-1.0.0.tgz: Internal Server Error' \
+  'ERR_PNPM_FETCH_502 GET https://registry.example.com/@workspace/second-package/-/second-package-2.0.0.tgz: Bad Gateway' \
+  'ERR_PNPM_META_FETCH_FAIL GET https://registry.example.com/@workspace/third-package: Request failed'
+exit 31
+EOF
+chmod +x "$fake_pnpm_dir/pnpm"
+
+set +e
+multiline_validation_output="$(
+  PATH="$fake_pnpm_dir:$PATH" \
+    bash "$repository_root/scripts/validate-dependencies.sh" 2>&1
+)"
+multiline_validation_status=$?
+set -e
+
+if [[ "$multiline_validation_status" -ne 31 ]]; then
+  printf 'Expected multiline validation to preserve status 31, got %s.\nOutput:\n%s\n' \
+    "$multiline_validation_status" "$multiline_validation_output" >&2
+  exit 1
+fi
+
+assert_contains "$multiline_validation_output" \
+  'ERR_PNPM_FETCH_500 GET https://registry.example.com/@workspace/first-package/-/first-package-1.0.0.tgz: Internal Server Error'
+assert_contains "$multiline_validation_output" \
+  'ERR_PNPM_FETCH_502 GET https://registry.example.com/@workspace/second-package/-/second-package-2.0.0.tgz: Bad Gateway'
+assert_contains "$multiline_validation_output" \
+  'ERR_PNPM_META_FETCH_FAIL GET https://registry.example.com/@workspace/third-package: Request failed'
+assert_contains "$multiline_validation_output" \
+  'Dependency validation failed: pnpm install --frozen-lockfile exited with status 31.'
+
 printf '%s\n' 'Dependency validation diagnostic regression tests passed.'
