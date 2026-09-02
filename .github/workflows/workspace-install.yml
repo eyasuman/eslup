@@ -7,6 +7,8 @@ on:
       - "**/package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
+      - "scripts/**"
+      - ".github/workflows/workspace-install.yml"
   workflow_dispatch:
 
 permissions:
@@ -30,6 +32,9 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+
+      - name: Test dependency failure diagnostics
+        run: pnpm run test:validate-dependencies
 
       - name: Validate frozen workspace install
         run: pnpm run validate:dependencies
