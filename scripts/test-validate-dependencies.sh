@@ -26,11 +26,12 @@ validation_status=$?
 set -e
 
 assert_contains() {
-  local expected="$1"
+  local output="$1"
+  local expected="$2"
 
-  if [[ "$validation_output" != *"$expected"* ]]; then
+  if [[ "$output" != *"$expected"* ]]; then
     printf 'Expected validation output to contain: %s\nActual output:\n%s\n' \
-      "$expected" "$validation_output" >&2
+      "$expected" "$output" >&2
     exit 1
   fi
 }
@@ -41,8 +42,35 @@ if [[ "$validation_status" -ne 17 ]]; then
   exit 1
 fi
 
-assert_contains '@workspace/blocked-package'
-assert_contains 'https://registry.example.com/@workspace/blocked-package/-/blocked-package-1.0.0.tgz'
-assert_contains 'Possible Replit package firewall rejection(s) detected.'
+assert_contains "$validation_output" '@workspace/blocked-package'
+assert_contains "$validation_output" 'https://registry.example.com/@workspace/blocked-package/-/blocked-package-1.0.0.tgz'
+assert_contains "$validation_output" 'Possible Replit package firewall rejection(s) detected.'
 
-printf '%s\n' 'Dependency firewall diagnostic regression test passed.'
+cat > "$fake_pnpm_dir/pnpm" <<'EOF'
+#!/usr/bin/env bash
+
+printf '%s\n' \
+  'ERR_PNPM_FETCH_500 GET https://registry.example.com/@workspace/ordinary-package/-/ordinary-package-1.0.0.tgz: Internal Server Error'
+exit 23
+EOF
+chmod +x "$fake_pnpm_dir/pnpm"
+
+set +e
+ordinary_validation_output="$(
+  PATH="$fake_pnpm_dir:$PATH" \
+    bash "$repository_root/scripts/validate-dependencies.sh" 2>&1
+)"
+ordinary_validation_status=$?
+set -e
+
+if [[ "$ordinary_validation_status" -ne 23 ]]; then
+  printf 'Expected ordinary validation to preserve status 23, got %s.\nOutput:\n%s\n' \
+    "$ordinary_validation_status" "$ordinary_validation_output" >&2
+  exit 1
+fi
+
+assert_contains "$ordinary_validation_output" 'ERR_PNPM_FETCH_500 GET https://registry.example.com/@workspace/ordinary-package/-/ordinary-package-1.0.0.tgz: Internal Server Error'
+assert_contains "$ordinary_validation_output" \
+  'Dependency validation failed: pnpm install --frozen-lockfile exited with status 23.'
+
+printf '%s\n' 'Dependency validation diagnostic regression tests passed.'
