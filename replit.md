@@ -25,11 +25,18 @@ All services start automatically via Replit workflows. To restart manually:
 # Install all dependencies (run once after cloning)
 pnpm install
 
+# Install only the mobile app and its shared client dependency
+pnpm install --filter @workspace/mobile...
+
 # Individual services
 pnpm --filter @workspace/mobile run dev         # Expo (port 18115)
 pnpm --filter @workspace/api-server run dev      # API server (port 8080)
 pnpm --filter @workspace/pulse-admin run dev     # Admin panel (port 20742)
 ```
+
+The Expo/EAS project configuration lives in `artifacts/mobile`, alongside the
+actual app. Native mobile build tooling must use that directory as the project
+root rather than the monorepo root.
 
 ## Environment variables
 

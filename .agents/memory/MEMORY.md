@@ -5,3 +5,4 @@
 - [Supabase realtime unsubscribe pitfall](supabase-realtime-unsubscribe.md) — use `supabase.removeChannel()`, not just `channel.unsubscribe()`, or remounts reuse a stale crashing channel.
 - [Verify spec docs against live app](verify-spec-docs-against-live-app.md) — uploaded project spec docs can claim wrong DB triggers/status strings; check real code + live DB.
 - [Supabase migration fallback](supabase-migration-fallback.md) — if the pooler recognizes the tenant but rejects reset passwords, use authorized Supabase management migrations.
+- [EAS in a mobile monorepo](eas-mobile-monorepo-root.md) — keep EAS/app configuration in the Expo package; building from the repository root targets the wrong project.

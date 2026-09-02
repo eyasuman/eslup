@@ -3,8 +3,7 @@ const path = require("path");
 
 const config = getDefaultConfig(__dirname);
 
-// Add support for pnpm symlinks and monorepo resolution
-config.resolver.unstable_enableSymlinks = true;
+// Expo SDK 54 handles pnpm monorepo symlinks automatically.
 config.resolver.unstable_enablePackageExports = true;
 
 module.exports = config;

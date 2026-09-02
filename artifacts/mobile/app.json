@@ -3,6 +3,11 @@
     "name": "PULSE",
     "slug": "mobile",
     "version": "1.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "c6229bad-d945-44b6-8771-12a13a4946a0"
+      }
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mobile",
@@ -15,8 +20,10 @@
     },
     "ios": {
       "supportsTablet": false,
+      "bundleIdentifier": "pulse",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "PULSE uses your location to find nearby healthcare providers."
+        "NSLocationWhenInUseUsageDescription": "PULSE uses your location to find nearby healthcare providers.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
