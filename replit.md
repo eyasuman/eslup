@@ -25,6 +25,9 @@ All services start automatically via Replit workflows. To restart manually:
 # Install all dependencies (run once after cloning)
 pnpm install
 
+# Required after changing dependencies in any workspace package
+pnpm run validate:dependencies
+
 # Install only the mobile app and its shared client dependency
 pnpm install --filter @workspace/mobile...
 
@@ -33,6 +36,13 @@ pnpm --filter @workspace/mobile run dev         # Expo (port 18115)
 pnpm --filter @workspace/api-server run dev      # API server (port 8080)
 pnpm --filter @workspace/pulse-admin run dev     # Admin panel (port 20742)
 ```
+
+The `workspace-install` validation runs the same clean
+`pnpm install --frozen-lockfile` from the repository root. Run it after every
+workspace dependency update and before treating the change as complete. If the
+install fails with a package firewall rejection, the validation output
+highlights the relevant error lines and package or registry URL so the blocked
+dependency can be replaced or removed.
 
 The Expo/EAS project configuration lives in `artifacts/mobile`, alongside the
 actual app. Native mobile build tooling must use that directory as the project
