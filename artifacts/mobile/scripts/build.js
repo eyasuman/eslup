@@ -23,7 +23,9 @@ function findWorkspaceRoot(startDir) {
 
 const workspaceRoot = findWorkspaceRoot(projectRoot);
 const basePath = (process.env.BASE_PATH || '/').replace(/\/+$/, '');
-const metroPort = Number(process.env.METRO_PORT || 8081);
+// Keep production bundling isolated from artifact dev servers (the mockup
+// sandbox commonly owns 8081 in this workspace).
+const metroPort = Number(process.env.METRO_PORT || 19001);
 const metroBaseUrl = `http://localhost:${metroPort}`;
 
 function exitWithError(message) {

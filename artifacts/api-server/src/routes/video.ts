@@ -26,8 +26,8 @@ function appointmentIsEligible(appointment: Record<string, unknown>) {
 }
 
 function config() {
-  const rawAppId = process.env.ZEGO_APP_ID;
-  const secret = process.env.ZEGO_SERVER_SECRET;
+  const rawAppId = process.env.ZEGO_APP_ID?.trim();
+  const secret = process.env.ZEGO_SERVER_SECRET?.trim();
   const appId = rawAppId && /^\d+$/.test(rawAppId) ? Number(rawAppId) : NaN;
   if (!Number.isSafeInteger(appId) || appId <= 0 || !secret || Buffer.byteLength(secret, "utf8") !== 32) {
     throw new Error("Video service is not configured");
