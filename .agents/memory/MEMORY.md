@@ -8,3 +8,4 @@
 - [EAS in a mobile monorepo](eas-mobile-monorepo-root.md) — keep EAS/app configuration in the Expo package; building from the repository root targets the wrong project.
 - [Post-merge setup safety](post-merge-setup-safety.md) — automatic merges should install and build only; database schema changes need an explicit migration workflow.
 - [Runtime module autoloading](runtime-module-autoloading.md) — invoking an unavailable runtime can unexpectedly add a module to `.replit`; check and restore config after probes.
+- [Supabase Node smoke checks](supabase-node-smoke-checks.md) — Node 20 scripts need the `ws` transport, and this project’s appointment columns use camelCase.
