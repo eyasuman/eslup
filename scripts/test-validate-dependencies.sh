@@ -79,7 +79,7 @@ cat > "$fake_pnpm_dir/pnpm" <<'EOF'
 printf '%s\n' \
   'ERR_PNPM_FETCH_500 GET https://registry.example.com/@workspace/first-package/-/first-package-1.0.0.tgz: Internal Server Error' \
   'ERR_PNPM_FETCH_502 GET https://registry.example.com/@workspace/second-package/-/second-package-2.0.0.tgz: Bad Gateway' \
-  'ERR_PNPM_META_FETCH_FAIL GET https://registry.example.com/@workspace/third-package: Request failed'
+  'ERR_PNPM_META_FETCH_FAIL GET https://registry.example.com/@workspace/third-package: Request failed' >&2
 exit 31
 EOF
 chmod +x "$fake_pnpm_dir/pnpm"
