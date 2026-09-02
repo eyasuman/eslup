@@ -357,6 +357,58 @@ CREATE TABLE IF NOT EXISTS calls (
 ALTER TABLE calls ADD COLUMN IF NOT EXISTS appointment_id UUID REFERENCES appointments(id);
 CREATE INDEX IF NOT EXISTS calls_appointment_id_idx ON calls (appointment_id);
 
+-- Legacy retention policy for calls created before appointment binding:
+-- preserve every orphaned row in an audit archive. Terminal orphan cleanup is
+-- performed after video_sessions exists so referenced history stays intact.
+CREATE TABLE IF NOT EXISTS public.calls_legacy_archive (
+  id             UUID PRIMARY KEY,
+  doctor_id      TEXT NOT NULL,
+  patient_id     TEXT NOT NULL,
+  patient_name   TEXT NOT NULL,
+  room_name      TEXT NOT NULL,
+  status         TEXT NOT NULL CHECK (status IN ('waiting', 'accepted', 'rejected', 'ended')),
+  appointment_id UUID,
+  created_at     TIMESTAMPTZ NOT NULL,
+  archived_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  archive_reason TEXT NOT NULL DEFAULT 'legacy call missing appointment link'
+);
+
+INSERT INTO public.calls_legacy_archive (
+  id,
+  doctor_id,
+  patient_id,
+  patient_name,
+  room_name,
+  status,
+  appointment_id,
+  created_at
+)
+SELECT
+  id,
+  doctor_id,
+  patient_id,
+  patient_name,
+  room_name,
+  status,
+  appointment_id,
+  created_at
+FROM public.calls
+WHERE appointment_id IS NULL
+ON CONFLICT (id) DO NOTHING;
+
+ALTER TABLE public.calls_legacy_archive ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS calls_legacy_archive_service_role ON public.calls_legacy_archive;
+CREATE POLICY "calls_legacy_archive_service_role" ON public.calls_legacy_archive
+  FOR ALL
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');
+
+-- NOT VALID keeps retained waiting/accepted legacy rows readable while
+-- enforcing the required appointment relationship for every future write.
+ALTER TABLE calls DROP CONSTRAINT IF EXISTS calls_appointment_id_required;
+ALTER TABLE calls ADD CONSTRAINT calls_appointment_id_required
+  CHECK (appointment_id IS NOT NULL) NOT VALID;
+
 CREATE INDEX IF NOT EXISTS calls_doctor_waiting_idx
   ON calls (doctor_id, created_at DESC)
   WHERE status = 'waiting';
@@ -466,6 +518,22 @@ CREATE POLICY "video_sessions_participant_select" ON video_sessions FOR SELECT
   USING (auth.uid() = patient_id OR auth.uid() = doctor_id);
 CREATE POLICY "video_sessions_service_role" ON video_sessions FOR ALL
   USING (auth.role() = 'service_role') WITH CHECK (auth.role() = 'service_role');
+
+-- Remove only terminal orphaned invitations after their archive copy exists.
+-- Active waiting/accepted invitations are deliberately left untouched.
+DELETE FROM public.calls c
+WHERE c.appointment_id IS NULL
+  AND c.status IN ('ended', 'rejected')
+  AND EXISTS (
+    SELECT 1
+    FROM public.calls_legacy_archive a
+    WHERE a.id = c.id
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.video_sessions vs
+    WHERE vs.call_id = c.id
+  );
 
 DO $$
 BEGIN

@@ -25,6 +25,13 @@ function appointmentIsEligible(appointment: Record<string, unknown>) {
     );
 }
 
+function invitationMatchesAppointment(
+  invitation: Record<string, unknown>,
+  appointmentId: string,
+) {
+  return asString(invitation.appointment_id) === appointmentId;
+}
+
 function config() {
   const rawAppId = process.env.ZEGO_APP_ID?.trim();
   const secret = process.env.ZEGO_SERVER_SECRET?.trim();
@@ -59,7 +66,12 @@ router.post("/invitations", requireParticipant, async (req, res) => {
       .limit(1)
       .maybeSingle();
     if (existingError) throw existingError;
-    if (existing) return res.json(existing);
+    if (existing) {
+      if (!invitationMatchesAppointment(existing, appointmentId)) {
+        throw new Error("Stored video invitation is missing its appointment link");
+      }
+      return res.json(existing);
+    }
 
     const insert = {
       appointment_id: appointmentId,
@@ -75,6 +87,9 @@ router.post("/invitations", requireParticipant, async (req, res) => {
       .select("*")
       .single();
     if (insertError) throw insertError;
+    if (!invitationMatchesAppointment(invitation, appointmentId)) {
+      throw new Error("Created video invitation is missing its appointment link");
+    }
     return res.json(invitation);
   } catch (cause) {
     req.log.error({ err: cause }, "Unable to create video invitation");

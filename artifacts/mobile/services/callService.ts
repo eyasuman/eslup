@@ -1,6 +1,8 @@
 import { createVideoInvitation } from "@workspace/api-client-react";
 import { supabase } from "@/lib/supabase";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export interface Call {
   id: string;
   doctor_id: string;
@@ -13,6 +15,9 @@ export interface Call {
 }
 
 export async function createCall(appointmentId: string): Promise<Call> {
+  if (!UUID.test(appointmentId)) {
+    throw new Error("A valid appointment is required to start a video call.");
+  }
   return createVideoInvitation({ appointmentId }) as Promise<Call>;
 }
 
