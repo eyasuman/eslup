@@ -10,3 +10,4 @@
 - [Runtime module autoloading](runtime-module-autoloading.md) — invoking an unavailable runtime can unexpectedly add a module to `.replit`; check and restore config after probes.
 - [Supabase Node smoke checks](supabase-node-smoke-checks.md) — Node 20 scripts need the `ws` transport, and this project’s appointment columns use camelCase.
 - [Android AAB build route](android-aab-build-route.md) — Expo Launch currently marks Play Store unsupported; prepare EAS config in the app package and build Android through Expo.dev.
+- [GitHub push credential recovery](github-push-credential-recovery.md) — when HTTPS pushes reject stale credentials, use Replit's authenticated `gh auth setup-git`, then retry normally.
