@@ -21,7 +21,7 @@ export default function PaymentsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { appointments, updatePaymentStatus } = useData();
+  const { appointments, updatePaymentStatus, getPaymentProofUrl } = useData();
   const [filter, setFilter] = useState<"pending" | "verified" | "rejected" | "all">("pending");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [viewUrl, setViewUrl] = useState<string | null>(null);
@@ -63,6 +63,18 @@ export default function PaymentsScreen() {
         },
       ]
     );
+  };
+
+  const handleViewProof = async (apt: Appointment) => {
+    setBusyId(apt.id);
+    try {
+      const proof = await getPaymentProofUrl(apt.id);
+      setViewUrl(proof.url);
+    } catch {
+      Alert.alert("Error", "Could not open this payment proof.");
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
@@ -121,7 +133,7 @@ export default function PaymentsScreen() {
             busy={busyId === item.id}
             onVerify={() => handleDecision(item, "verified")}
             onReject={() => handleDecision(item, "rejected")}
-            onView={() => setViewUrl(item.paymentProofUrl ?? null)}
+            onView={() => void handleViewProof(item)}
           />
         )}
         contentContainerStyle={[

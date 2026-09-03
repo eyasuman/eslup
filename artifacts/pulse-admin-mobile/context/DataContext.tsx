@@ -46,6 +46,7 @@ export interface Appointment {
   serviceType: string;
   paymentStatus: PaymentStatus;
   paymentProofUrl?: string | null;
+  paymentProofUploadId?: string | null;
   paymentMethod?: string | null;
   transactionId?: string | null;
   senderName?: string | null;
@@ -226,6 +227,7 @@ interface DataContextType {
   uploadBannerImage: (base64: string, contentType: string, filename?: string) => Promise<string>;
   updateReviewStatus: (id: string, status: ReviewStatus) => Promise<void>;
   updatePaymentStatus: (id: string, status: PaymentStatus) => Promise<void>;
+  getPaymentProofUrl: (id: string) => Promise<{ url: string; name: string | null }>;
   togglePatientStatus: (id: string) => Promise<void>;
   updateCaseStatus: (id: string, status: TeleradiologyCase["status"]) => Promise<void>;
   updateSettings: (s: PlatformSettings) => Promise<void>;
@@ -254,7 +256,7 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   paymentMethod: "Bank Transfer",
 };
 
-export function DataProvider({ children }: { children: ReactNode }) {
+export function DataProvider({ children, enabled = true }: { children: ReactNode; enabled?: boolean }) {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [revenue, setRevenue] = useState<RevenueEntry[]>([]);
@@ -274,6 +276,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(() => setRefreshTick((t) => t + 1), []);
 
   useEffect(() => {
+    if (!enabled) {
+      setIsLoading(false);
+      return;
+    }
     let cancelled = false;
     const isFirst = isFirstLoadRef.current;
     if (isFirst) setIsLoading(true);
@@ -399,7 +405,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     loadAll();
     return () => { cancelled = true; };
-  }, [refreshTick]);
+  }, [enabled, refreshTick]);
 
   // Background sync: keep the admin console in sync with the live Supabase data
   // that the patient app also reads/writes. Refetch every 15s without blocking
@@ -492,6 +498,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setAppointments((prev) => prev.map((a) => (a.id === id ? updated : a)));
   };
 
+  const getPaymentProofUrl = useCallback(async (id: string) => {
+    return apiFetch<{ url: string; name: string | null }>(`/appointments/${id}/payment-proof-url`);
+  }, []);
+
   const updateReviewStatus = async (id: string, status: ReviewStatus) => {
     const updated = await apiFetch<Review>(`/reviews/${id}/status`, {
       method: "PATCH",
@@ -546,7 +556,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         notifications, notificationsUnread,
         updateDoctorStatus, getDoctorLicenseUrl, deleteProvider, addInstitute, updateInstituteStatus, deleteInstitute,
         addBanner, toggleBanner, deleteBanner, uploadBannerImage,
-        updateReviewStatus, updatePaymentStatus, togglePatientStatus, updateCaseStatus, updateSettings,
+        updateReviewStatus, updatePaymentStatus, getPaymentProofUrl, togglePatientStatus, updateCaseStatus, updateSettings,
         markNotificationRead, markAllNotificationsRead,
         isLoading, refresh,
       }}

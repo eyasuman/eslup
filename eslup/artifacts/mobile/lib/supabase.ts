@@ -62,6 +62,10 @@ export async function signUp(email: string, password: string, name: string, role
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
+  if (data.user?.app_metadata?.suspended === true) {
+    await supabase.auth.signOut();
+    throw new Error("This account has been suspended. Please contact support.");
+  }
   return data;
 }
 

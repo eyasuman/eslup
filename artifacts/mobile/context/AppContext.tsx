@@ -133,7 +133,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         const { data: { session } } = await supabase.auth.getSession();
 
-        if (session?.user && mounted) {
+        if (session?.user?.app_metadata?.suspended === true) {
+          await supabase.auth.signOut();
+          await AsyncStorage.multiRemove(["user", "userRole", "bookings"]);
+        } else if (session?.user && mounted) {
           // Determine role: provider > institute > client (check in order)
           let doctorProfile: any = null;
           let instituteProfile: any = null;
@@ -335,6 +338,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!mounted) return;
 
       if (event === "SIGNED_IN" && session?.user) {
+        if (session.user.app_metadata?.suspended === true) {
+          await supabase.auth.signOut();
+          return;
+        }
         let doctorProfile: any = null;
         let instituteProfile2: any = null;
         try { doctorProfile = await getDoctorByUserId(session.user.id); } catch {}

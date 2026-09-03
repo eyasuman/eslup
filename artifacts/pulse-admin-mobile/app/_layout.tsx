@@ -38,7 +38,12 @@ function AuthGate() {
   if (isLoading) return <View style={[styles.center, { backgroundColor: colors.darkNavy }]}><ActivityIndicator size="large" color={colors.tint} /></View>;
   if (!session) return <Stack screenOptions={{ headerShown: false }}><Stack.Screen name="login" /></Stack>;
   if (!isAdmin) return <AccessDenied />;
-  return <DataProvider><RootLayoutNav /></DataProvider>;
+  return <RootLayoutNav />;
+}
+
+function DataBoundary({ children }: { children: React.ReactNode }) {
+  const { session, isAdmin } = useAuth();
+  return <DataProvider enabled={!!session && isAdmin}>{children}</DataProvider>;
 }
 
 export default function RootLayout() {
@@ -46,6 +51,6 @@ export default function RootLayout() {
   const hiddenRef = useRef(false);
   useEffect(() => { if ((fontsLoaded || fontError) && !hiddenRef.current) { hiddenRef.current = true; SplashScreen.hideAsync().catch(() => {}); } }, [fontsLoaded, fontError]);
   if (!fontsLoaded && !fontError) return null;
-  return <SafeAreaProvider><ErrorBoundary><QueryClientProvider client={queryClient}><GestureHandlerRootView style={{ flex: 1 }}><KeyboardProvider><AuthProvider><AuthGate /></AuthProvider></KeyboardProvider></GestureHandlerRootView></QueryClientProvider></ErrorBoundary></SafeAreaProvider>;
+  return <SafeAreaProvider><ErrorBoundary><QueryClientProvider client={queryClient}><GestureHandlerRootView style={{ flex: 1 }}><KeyboardProvider><AuthProvider><DataBoundary><AuthGate /></DataBoundary></AuthProvider></KeyboardProvider></GestureHandlerRootView></QueryClientProvider></ErrorBoundary></SafeAreaProvider>;
 }
 const styles = StyleSheet.create({ center: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 28 }, deniedEyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 2 }, deniedTitle: { fontSize: 30, fontWeight: "700", marginTop: 14 }, deniedCopy: { fontSize: 15, lineHeight: 23, textAlign: "center", marginTop: 12 }, signOut: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 18, paddingVertical: 12, marginTop: 28 }, signOutText: { fontWeight: "700" } });
