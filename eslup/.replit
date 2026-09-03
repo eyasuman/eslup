@@ -1,0 +1,65 @@
+modules = ["nodejs-20", "web"]
+
+[deployment]
+router = "application"
+deploymentTarget = "autoscale"
+
+[deployment.postBuild]
+args = ["pnpm", "store", "prune"]
+env = { "CI" = "true" }
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/mobile: expo"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "workspace-install"
+
+[[workflows.workflow]]
+name = "artifacts/mobile: expo"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=18115 pnpm --filter @workspace/mobile run dev"
+waitForPort = 18115
+
+[[workflows.workflow]]
+name = "workspace-install"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run validate:dependencies"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[agent]
+stack = "PNPM_WORKSPACE"
+expertMode = true
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 60000
+
+[userenv]
+
+[userenv.shared]
+EXPO_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_N4bZft-uftnMX-o6zyBOwA_OkFTZlWK"
+EXPO_PUBLIC_SUPABASE_URL = "https://qxdqubzymuqgppwlzbsc.supabase.co"
+
+[nix]
+channel = "stable-25_05"
