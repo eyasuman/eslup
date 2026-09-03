@@ -1,3 +1,16 @@
 uploads = []
 generated = []
-outputs = []
+
+[[outputs]]
+id = "L48WfsOAA87p8paw8nYkI"
+uri = "file://builds/pulse-patient-provider-v3.aab"
+type = "unspecified"
+title = "PULSE Patient & Provider Android Bundle v3"
+description = "Production Google Play App Bundle for com.PILSE.myapp. Includes the working OpenStreetMap provider and health-facility map flows."
+logical_id = "54607c74-59c0-4e3e-a90e-e5691bfc57f4"
+content_hash = "sha256:bd8275aab4f39b26b33853d518c774b09898cbff64b2e2ec04203b7254d9d7a1"
+size = 80322059
+mtime_ms = 1788467707277
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:7c32571a-5dcd-4645-9c33-ab247db7d03d/54607c74-59c0-4e3e-a90e-e5691bfc57f4/be340f95-7074-4a70-a004-b822b082ca8e"
+storage_version_token = "1788467713601364"
+content_type = "application/octet-stream"
