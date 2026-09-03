@@ -35,9 +35,11 @@ import {
 import { useColors } from "@/hooks/useColors";
 import NearbyMap from "@/components/NearbyMap";
 import { useTranslation } from "@/constants/translations";
+import { ADDIS_HOSPITALS } from "@/data/ethiopianHospitals";
 import {
   getMapLocationKey,
   isValidLocationCoordinates,
+  normalizeLocationCoordinate,
   type MapLocation,
   type MapLocationKind,
 } from "@/lib/mapLocations";
@@ -299,8 +301,8 @@ export default function HealthcareScreen() {
 
   const selectedRouteLocation = useMemo<MapLocation | null>(() => {
     if (!selectedType || !selectedId) return null;
-    const lat = selectedLat == null ? undefined : Number(selectedLat);
-    const lng = selectedLng == null ? undefined : Number(selectedLng);
+    const lat = normalizeLocationCoordinate(selectedLat);
+    const lng = normalizeLocationCoordinate(selectedLng);
     return {
       id: selectedId,
       kind: selectedType,
@@ -322,24 +324,54 @@ export default function HealthcareScreen() {
           name: doctor.name,
           subtitle: doctor.specialty ?? doctor.providerType ?? "Healthcare Provider",
           city: doctor.city,
-          lat: doctor.lat,
-          lng: doctor.lng,
+          lat: normalizeLocationCoordinate(doctor.lat),
+          lng: normalizeLocationCoordinate(doctor.lng),
           serviceModes: doctor.serviceModes,
           availability: doctor.availability,
         })),
-      ...institutions
-        .filter((institution) => Boolean(institution.id ?? institution.userId))
-        .map((institution) => ({
-          id: institution.id ?? institution.userId!,
-          kind: "institute" as const,
-          name: institution.name,
-          subtitle: institution.type ?? "Health Institute",
-          city: institution.city,
-          lat: institution.lat,
-          lng: institution.lng,
-          rating: institution.rating,
-        })),
     ];
+    const baselineByName = new Map(
+      ADDIS_HOSPITALS.map((hospital) => [hospital.name.trim().toLowerCase(), hospital])
+    );
+    const instituteByName = new Map<string, number>();
+    ADDIS_HOSPITALS.forEach((hospital) => {
+      instituteByName.set(hospital.name.trim().toLowerCase(), locations.length);
+      locations.push({
+        id: hospital.id,
+        kind: "institute",
+        name: hospital.name,
+        subtitle: hospital.type,
+        city: hospital.city,
+        lat: hospital.lat,
+        lng: hospital.lng,
+        rating: hospital.rating,
+      });
+    });
+    institutions
+        .filter((institution) => Boolean(institution.id ?? institution.userId))
+        .forEach((institution) => {
+          const baseline = baselineByName.get(institution.name.trim().toLowerCase());
+          const liveLat = normalizeLocationCoordinate(institution.lat);
+          const liveLng = normalizeLocationCoordinate(institution.lng);
+          const location: MapLocation = {
+            id: institution.id ?? institution.userId!,
+            kind: "institute",
+            name: institution.name,
+            subtitle: institution.type ?? "Health Institute",
+            city: institution.city ?? baseline?.city,
+            lat: isValidLocationCoordinates(liveLat, liveLng) ? liveLat : baseline?.lat,
+            lng: isValidLocationCoordinates(liveLat, liveLng) ? liveLng : baseline?.lng,
+            rating: institution.rating ?? baseline?.rating,
+          };
+          const existingIndex = instituteByName.get(institution.name.trim().toLowerCase());
+          if (existingIndex == null) {
+            instituteByName.set(institution.name.trim().toLowerCase(), locations.length);
+            locations.push(location);
+          } else {
+            // Live metadata and valid coordinates take precedence over baseline data.
+            locations[existingIndex] = location;
+          }
+        });
 
     if (selectedRouteLocation) {
       const selectedKey = getMapLocationKey(selectedRouteLocation);

@@ -19,11 +19,20 @@ export interface MapLocation {
   availability?: any[];
 }
 
+/** Converts database/form coordinate values without accepting partial numbers such as "9abc". */
+export function normalizeLocationCoordinate(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const normalized = Number(value.trim());
+  return Number.isFinite(normalized) ? normalized : undefined;
+}
+
 export function isValidLocationCoordinates(lat: unknown, lng: unknown): lat is number {
-  if (typeof lat !== "number" || typeof lng !== "number") return false;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
-  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return false;
-  return lat !== 0 && lng !== 0;
+  const normalizedLat = normalizeLocationCoordinate(lat);
+  const normalizedLng = normalizeLocationCoordinate(lng);
+  if (normalizedLat == null || normalizedLng == null) return false;
+  if (normalizedLat < -90 || normalizedLat > 90 || normalizedLng < -180 || normalizedLng > 180) return false;
+  return normalizedLat !== 0 && normalizedLng !== 0;
 }
 
 export function getMapLocationKey(location: Pick<MapLocation, "id" | "kind">) {

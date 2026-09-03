@@ -69,6 +69,36 @@ const FALLBACK_BANNERS: BannerItem[] = [
   },
 ];
 
+function hospitalNameKey(name: string) {
+  return name.trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/** Keeps the curated Addis locations while allowing active records to enrich them. */
+function mergeHospitalsWithBaseline(remote: Hospital[]) {
+  const merged = [...ADDIS_HOSPITALS];
+  const indexes = new Map(merged.map((hospital, index) => [hospitalNameKey(hospital.name), index]));
+  remote.forEach((live) => {
+    const key = hospitalNameKey(live.name);
+    const existingIndex = indexes.get(key);
+    const baseline = existingIndex == null ? undefined : merged[existingIndex];
+    const liveHasCoordinates = isValidLocationCoordinates(live.lat, live.lng);
+    const record: Hospital = {
+      ...baseline,
+      ...live,
+      // Live coordinates are authoritative only when the complete pair is valid.
+      lat: liveHasCoordinates ? live.lat : baseline?.lat,
+      lng: liveHasCoordinates ? live.lng : baseline?.lng,
+    };
+    if (existingIndex == null) {
+      indexes.set(key, merged.length);
+      merged.push(record);
+    } else {
+      merged[existingIndex] = record;
+    }
+  });
+  return merged;
+}
+
 function DarkGradientContainer({ children }: { children: React.ReactNode }) {
   return (
     <LinearGradient colors={["#202937", "#315d93"]} style={{ flex: 1 }}>
@@ -143,7 +173,7 @@ export default function ExploreScreen() {
         const [institutions, types] = await Promise.all([getInstitutions(), getInstitutionTypes()]);
         if (!active) return;
         const mapped = institutions.map(institutionToHospital);
-        if (mapped.length > 0) setHospitals(mapped);
+        setHospitals(mergeHospitalsWithBaseline(mapped));
         // Combine remote types with the fallback hospital types so the filter always shows something useful
         const localTypes = Array.from(new Set(ADDIS_HOSPITALS.map((h) => h.type))).sort();
         const merged = Array.from(new Set([...types, ...localTypes])).sort((a, b) => a.localeCompare(b));

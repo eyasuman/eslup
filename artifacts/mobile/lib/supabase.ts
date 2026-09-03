@@ -4,6 +4,7 @@ import * as Crypto from "expo-crypto";
 import { fetch as expoFetch } from "expo/fetch";
 import { Platform } from "react-native";
 import { Hospital } from "@/data/ethiopianHospitals";
+import { normalizeLocationCoordinate } from "@/lib/mapLocations";
 import { isValidLocationCoordinates } from "@/lib/mapLocations";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -1355,8 +1356,8 @@ export function institutionToHospital(inst: Institution): Hospital {
     distanceKm: inst.distanceKm ?? 0,
     open24h: inst.open24h ?? false,
     phone: inst.phone ?? "",
-    lat: inst.lat,
-    lng: inst.lng,
+    lat: normalizeLocationCoordinate(inst.lat),
+    lng: normalizeLocationCoordinate(inst.lng),
     categories,
     services: inst.services ?? [],
     color: inst.color ?? "#315d93",
