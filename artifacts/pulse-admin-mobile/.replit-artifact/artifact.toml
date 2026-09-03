@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/pulse-admin-mobile/"
+title = "Pulse Network Admin"
+description = "A secure mobile administration app for managing PULSE providers, appointments, payments, institutes, banners, patients, reviews, licenses, and operational settings through the existing Supabase-backed API."
+version = "1.0.0"
+id = "artifacts/pulse-admin-mobile"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/pulse-admin-mobile/" ]
+localPort = 21193
+
+[services.development]
+run = "pnpm --filter @workspace/pulse-admin-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pulse-admin-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/pulse-admin-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "21193"
+BASE_PATH = "/pulse-admin-mobile/"
