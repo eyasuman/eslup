@@ -5,6 +5,47 @@ set -o pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repository_root"
 
+validate_repository_layout() {
+  local invalid_files=()
+  local file
+  local relative_path
+
+  while IFS= read -r -d '' file; do
+    relative_path="${file#./}"
+
+    case "$relative_path" in
+      .replit|pnpm-workspace.yaml|pnpm-lock.yaml|package.json)
+        ;;
+      artifacts/*/package.json|lib/*/package.json|lib/integrations/*/package.json|scripts/package.json)
+        ;;
+      *)
+        invalid_files+=("$relative_path")
+        ;;
+    esac
+  done < <(
+    find . \
+      \( -path './.git' -o -path './.cache' -o -path './.local' -o -name node_modules \) -prune \
+      -o -type f \( \
+        -name '.replit' \
+        -o -name 'pnpm-workspace.yaml' \
+        -o -name 'pnpm-lock.yaml' \
+        -o -name 'package.json' \
+      \) -print0
+  )
+
+  if ((${#invalid_files[@]} > 0)); then
+    printf 'Repository layout validation failed. Workspace entry-point files must stay at the repository root.\n' >&2
+    printf 'Package manifests are only allowed for workspace packages under artifacts/, lib/, and scripts/.\n' >&2
+    printf 'Unexpected files:\n' >&2
+    printf '  - %s\n' "${invalid_files[@]}" >&2
+    return 1
+  fi
+}
+
+if ! validate_repository_layout; then
+  exit 1
+fi
+
 install_log="$(mktemp)"
 trap 'rm -f "$install_log"' EXIT
 

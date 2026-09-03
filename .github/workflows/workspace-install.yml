@@ -6,7 +6,11 @@ on:
       - "package.json"
       - "**/package.json"
       - "pnpm-lock.yaml"
+      - "**/pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
+      - "**/pnpm-workspace.yaml"
+      - ".replit"
+      - "**/.replit"
       - "scripts/**"
       - ".github/workflows/workspace-install.yml"
   workflow_dispatch:

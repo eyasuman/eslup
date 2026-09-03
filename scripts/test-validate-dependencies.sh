@@ -4,10 +4,40 @@ set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 test_dir="$(mktemp -d)"
-trap 'rm -rf "$test_dir"' EXIT
+layout_fixture="$repository_root/.validate-dependencies-layout-test-$$"
+trap 'rm -rf "$test_dir" "$layout_fixture"' EXIT
 
 fake_pnpm_dir="$test_dir/bin"
 mkdir -p "$fake_pnpm_dir"
+
+mkdir -p "$layout_fixture/nested"
+for forbidden_file in .replit pnpm-workspace.yaml pnpm-lock.yaml package.json; do
+  touch "$layout_fixture/nested/$forbidden_file"
+
+  set +e
+  layout_validation_output="$(
+    PATH="$fake_pnpm_dir:$PATH" \
+      bash "$repository_root/scripts/validate-dependencies.sh" 2>&1
+  )"
+  layout_validation_status=$?
+  set -e
+
+  if [[ "$layout_validation_status" -ne 1 ]]; then
+    printf 'Expected nested %s to fail repository layout validation, got status %s.\nOutput:\n%s\n' \
+      "$forbidden_file" "$layout_validation_status" "$layout_validation_output" >&2
+    exit 1
+  fi
+
+  assert_layout_output="$layout_validation_output"
+  if [[ "$assert_layout_output" != *"nested/$forbidden_file"* ]]; then
+    printf 'Expected layout validation output to contain nested/%s.\nOutput:\n%s\n' \
+      "$forbidden_file" "$layout_validation_output" >&2
+    exit 1
+  fi
+
+  rm "$layout_fixture/nested/$forbidden_file"
+done
+
 cat > "$fake_pnpm_dir/pnpm" <<'EOF'
 #!/usr/bin/env bash
 
