@@ -2,7 +2,13 @@
   "expo": {
     "name": "Pulse Network Admin",
     "slug": "pulse-admin-mobile",
+    "owner": "the_god_of_monarch",
     "version": "1.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "6477717b-be5f-4d82-af6b-f8064f95b405"
+      }
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "pulse-admin-mobile",
