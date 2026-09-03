@@ -4,11 +4,14 @@ set -euo pipefail
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 test_dir="$(mktemp -d)"
-layout_fixture="$repository_root/.validate-dependencies-layout-test-$$"
+layout_fixture="$test_dir/repository"
 trap 'rm -rf "$test_dir" "$layout_fixture"' EXIT
 
 fake_pnpm_dir="$test_dir/bin"
-mkdir -p "$fake_pnpm_dir"
+mkdir -p "$fake_pnpm_dir" "$layout_fixture/scripts"
+cp "$repository_root/scripts/validate-dependencies.sh" \
+  "$layout_fixture/scripts/validate-dependencies.sh"
+chmod +x "$layout_fixture/scripts/validate-dependencies.sh"
 
 mkdir -p "$layout_fixture/nested"
 for forbidden_file in .replit pnpm-workspace.yaml pnpm-lock.yaml package.json; do
@@ -17,7 +20,7 @@ for forbidden_file in .replit pnpm-workspace.yaml pnpm-lock.yaml package.json; d
   set +e
   layout_validation_output="$(
     PATH="$fake_pnpm_dir:$PATH" \
-      bash "$repository_root/scripts/validate-dependencies.sh" 2>&1
+      bash "$layout_fixture/scripts/validate-dependencies.sh" 2>&1
   )"
   layout_validation_status=$?
   set -e
@@ -38,6 +41,62 @@ for forbidden_file in .replit pnpm-workspace.yaml pnpm-lock.yaml package.json; d
   rm "$layout_fixture/nested/$forbidden_file"
 done
 
+mkdir -p \
+  "$layout_fixture/artifacts/example-app" \
+  "$layout_fixture/lib/shared" \
+  "$layout_fixture/lib/integrations/example-adapter" \
+  "$layout_fixture/scripts"
+touch \
+  "$layout_fixture/artifacts/example-app/package.json" \
+  "$layout_fixture/lib/shared/package.json" \
+  "$layout_fixture/lib/integrations/example-adapter/package.json" \
+  "$layout_fixture/scripts/package.json"
+
+cat > "$fake_pnpm_dir/pnpm" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$fake_pnpm_dir/pnpm"
+
+set +e
+approved_layout_output="$(
+  PATH="$fake_pnpm_dir:$PATH" \
+    bash "$layout_fixture/scripts/validate-dependencies.sh" 2>&1
+)"
+approved_layout_status=$?
+set -e
+
+if [[ "$approved_layout_status" -ne 0 ]]; then
+  printf 'Expected approved workspace package manifests to pass repository layout validation, got status %s.\nOutput:\n%s\n' \
+    "$approved_layout_status" "$approved_layout_output" >&2
+  exit 1
+fi
+
+mkdir -p "$layout_fixture/outside"
+touch "$layout_fixture/outside/package.json"
+
+set +e
+outside_package_output="$(
+  PATH="$fake_pnpm_dir:$PATH" \
+    bash "$layout_fixture/scripts/validate-dependencies.sh" 2>&1
+)"
+outside_package_status=$?
+set -e
+
+if [[ "$outside_package_status" -ne 1 ]]; then
+  printf 'Expected package.json outside approved workspace package paths to fail repository layout validation, got status %s.\nOutput:\n%s\n' \
+    "$outside_package_status" "$outside_package_output" >&2
+  exit 1
+fi
+
+if [[ "$outside_package_output" != *"outside/package.json"* ]]; then
+  printf 'Expected layout validation output to contain outside/package.json.\nOutput:\n%s\n' \
+    "$outside_package_output" >&2
+  exit 1
+fi
+
+rm -rf "$layout_fixture/outside"
+
 cat > "$fake_pnpm_dir/pnpm" <<'EOF'
 #!/usr/bin/env bash
 
@@ -50,7 +109,7 @@ chmod +x "$fake_pnpm_dir/pnpm"
 set +e
 validation_output="$(
   PATH="$fake_pnpm_dir:$PATH" \
-    bash "$repository_root/scripts/validate-dependencies.sh" 2>&1
+    bash "$layout_fixture/scripts/validate-dependencies.sh" 2>&1
 )"
 validation_status=$?
 set -e
@@ -88,7 +147,7 @@ chmod +x "$fake_pnpm_dir/pnpm"
 set +e
 ordinary_validation_output="$(
   PATH="$fake_pnpm_dir:$PATH" \
-    bash "$repository_root/scripts/validate-dependencies.sh" 2>&1
+    bash "$layout_fixture/scripts/validate-dependencies.sh" 2>&1
 )"
 ordinary_validation_status=$?
 set -e
@@ -117,7 +176,7 @@ chmod +x "$fake_pnpm_dir/pnpm"
 set +e
 multiline_validation_output="$(
   PATH="$fake_pnpm_dir:$PATH" \
-    bash "$repository_root/scripts/validate-dependencies.sh" 2>&1
+    bash "$layout_fixture/scripts/validate-dependencies.sh" 2>&1
 )"
 multiline_validation_status=$?
 set -e
