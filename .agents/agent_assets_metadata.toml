@@ -14,3 +14,17 @@ mtime_ms = 1788467707277
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:7c32571a-5dcd-4645-9c33-ab247db7d03d/54607c74-59c0-4e3e-a90e-e5691bfc57f4/be340f95-7074-4a70-a004-b822b082ca8e"
 storage_version_token = "1788467713601364"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "_RTzXXSlab31bBweQYGhh"
+uri = "file://builds/pulse-upload-key-reset-certificate.zip"
+type = "unspecified"
+title = "PULSE Upload-Key Reset Certificate"
+description = "Public certificate for the current EAS Android signing key. Use it only if Google Play requires an upload-key reset for com.PILSE.myapp."
+logical_id = "c72575fa-7277-476b-bb31-8534030de2c0"
+content_hash = "sha256:63ad85114b99ac23de28a95716ab508536088aa7fb7bdf0c82be2628214cef50"
+size = 1617
+mtime_ms = 1788470716838
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:7c32571a-5dcd-4645-9c33-ab247db7d03d/c72575fa-7277-476b-bb31-8534030de2c0/61b7c16f-da0b-4e61-96e5-fd19fb0480fd"
+storage_version_token = "1788470723719383"
+content_type = "application/octet-stream"
