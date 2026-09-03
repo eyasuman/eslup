@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "PULSE",
-    "slug": "mobile",
-    "owner": "zero_to_monarch",
+    "slug": "pulse-app-v-10",
+    "owner": "the_god_of_monarch",
     "version": "1.0.0",
     "extra": {
       "eas": {
@@ -28,7 +28,7 @@
       }
     },
     "android": {
-      "package": "com.pulse.app",
+      "package": "com.pulsehealth.app",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",

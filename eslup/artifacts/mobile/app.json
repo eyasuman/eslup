@@ -28,7 +28,7 @@
       }
     },
     "android": {
-      "package": "com.pulse.app",
+      "package": "com.pulsehealth.app",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
