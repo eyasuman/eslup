@@ -28,3 +28,17 @@ mtime_ms = 1788470716838
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:7c32571a-5dcd-4645-9c33-ab247db7d03d/c72575fa-7277-476b-bb31-8534030de2c0/61b7c16f-da0b-4e61-96e5-fd19fb0480fd"
 storage_version_token = "1788470723719383"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "zrqf4V5zrTv9XH_kmiKg1"
+uri = "file://PAYMENT_METHODS_MANAGEMENT.md"
+type = "text"
+title = "PULSE Payment Methods Management"
+description = "A concise reference showing the real patient checkout, Supabase, provider, and admin payment-management locations, including the current Admin Settings wiring limitation."
+logical_id = "03ad0a48-0ac6-431e-b50b-026441cb4929"
+content_hash = "sha256:dc947c6f07d964a9a5262cc8822a23e2a5410843717170cea943fbe89edd2a54"
+size = 3998
+mtime_ms = 1789353000305
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:7c32571a-5dcd-4645-9c33-ab247db7d03d/03ad0a48-0ac6-431e-b50b-026441cb4929/6eae4e29-0d43-4302-b062-898a6fbbac0d"
+storage_version_token = "1789353005253534"
+content_type = "text/markdown"
