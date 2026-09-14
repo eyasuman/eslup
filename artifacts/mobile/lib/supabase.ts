@@ -92,31 +92,28 @@ export type PaymentMethodConfig = {
   enabled: boolean;
 };
 
-const PAYMENT_SETTING_IDS = [
-  "payment_telebirr_number",
-  "payment_telebirr_name",
-  "payment_telebirr_enabled",
-  "payment_cbe_number",
-  "payment_cbe_name",
-  "payment_cbe_enabled",
-] as const;
+type PlatformPaymentMethodsRow = {
+  global_telebirr_number: string;
+  global_telebirr_name: string;
+  global_cbe_number: string;
+  global_cbe_name: string;
+};
 
 export async function getPaymentMethods(): Promise<PaymentMethodConfig[]> {
   const { data, error } = await supabase
-    .from("settings")
-    .select("id,email")
-    .in("id", [...PAYMENT_SETTING_IDS]);
+    .from("platform_payment_methods")
+    .select(
+      "global_telebirr_number,global_telebirr_name,global_cbe_number,global_cbe_name",
+    )
+    .eq("id", true)
+    .single<PlatformPaymentMethodsRow>();
 
   if (error) throw error;
 
-  const values = new Map(
-    (data ?? []).map((row: { id: string; email: string | null }) => [
-      row.id,
-      row.email ?? "",
-    ]),
-  );
-  const telebirrNumber = values.get("payment_telebirr_number")?.trim() ?? "";
-  const cbeNumber = values.get("payment_cbe_number")?.trim() ?? "";
+  const telebirrNumber = data.global_telebirr_number.trim();
+  const telebirrName = data.global_telebirr_name.trim();
+  const cbeNumber = data.global_cbe_number.trim();
+  const cbeName = data.global_cbe_name.trim();
 
   return [
     {
@@ -125,10 +122,8 @@ export async function getPaymentMethods(): Promise<PaymentMethodConfig[]> {
       description: "Ethiopian mobile money transfer",
       accountLabel: "Telebirr Merchant Number",
       accountNumber: telebirrNumber,
-      accountName: values.get("payment_telebirr_name") || "PULSE Health-Tech PLC",
-      enabled:
-        telebirrNumber.length > 0 &&
-        values.get("payment_telebirr_enabled") !== "false",
+      accountName: telebirrName,
+      enabled: telebirrNumber.length > 0,
     },
     {
       id: "cbe",
@@ -136,10 +131,8 @@ export async function getPaymentMethods(): Promise<PaymentMethodConfig[]> {
       description: "Bank transfer via CBE account",
       accountLabel: "CBE Account Number",
       accountNumber: cbeNumber,
-      accountName: values.get("payment_cbe_name") || "PULSE Health-Tech PLC",
-      enabled:
-        cbeNumber.length > 0 &&
-        values.get("payment_cbe_enabled") !== "false",
+      accountName: cbeName,
+      enabled: cbeNumber.length > 0,
     },
   ];
 }

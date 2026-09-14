@@ -1,10 +1,10 @@
 ---
-name: Public payment settings access
-description: Database rules required for patient checkout to read admin-managed payment methods safely.
+name: Platform payment source
+description: Canonical database source for patient-visible platform payment accounts.
 ---
 
-Admin-managed booking payment methods use several dedicated rows in the shared settings table. Do not restore a unique index over a constant expression that restricts this table to one row.
+Patient booking payment methods must come from the dedicated singleton platform-payment table and its global Telebirr and CBE fields. Never derive payment accounts from the general settings table or authentication/profile phone values.
 
-**Why:** The legacy singleton index allowed the first payment value to save but rejected the remaining method fields. In addition, an RLS policy alone was insufficient: PostgREST returned a table-permission error until the public roles also received table-level SELECT permission.
+**Why:** General settings stored phone-like values that could be mistaken for merchant accounts. Dedicated payment migrations created the authoritative payment record with public read access and separate account numbers and account names.
 
-**How to apply:** Keep the primary key on each setting ID, allow multiple rows, grant SELECT to anon and authenticated, and use a scoped SELECT policy that exposes only the approved payment-setting IDs. Never expose unrelated settings rows.
+**How to apply:** Read the singleton payment row directly, show each method only when its account number is non-empty, and keep account names and numbers sourced from that same row. Do not add fallback or fabricated payment details.
