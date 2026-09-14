@@ -82,6 +82,62 @@ export function subscribeToPaymentMethodChanges(onChange: () => void) {
     .subscribe();
 }
 
+export type PaymentMethodConfig = {
+  id: "telebirr" | "cbe";
+  label: string;
+  description: string;
+  accountLabel: string;
+  accountNumber: string;
+  accountName: string;
+  enabled: boolean;
+};
+
+const PAYMENT_SETTING_IDS = [
+  "payment_telebirr_number",
+  "payment_telebirr_name",
+  "payment_telebirr_enabled",
+  "payment_cbe_number",
+  "payment_cbe_name",
+  "payment_cbe_enabled",
+] as const;
+
+export async function getPaymentMethods(): Promise<PaymentMethodConfig[]> {
+  const { data, error } = await supabase
+    .from("settings")
+    .select("id,email")
+    .in("id", [...PAYMENT_SETTING_IDS]);
+
+  if (error) throw error;
+
+  const values = new Map(
+    (data ?? []).map((row: { id: string; email: string | null }) => [
+      row.id,
+      row.email ?? "",
+    ]),
+  );
+
+  return [
+    {
+      id: "telebirr",
+      label: "Telebirr",
+      description: "Ethiopian mobile money transfer",
+      accountLabel: "Telebirr Merchant Number",
+      accountNumber: values.get("payment_telebirr_number") || "0912 345 678",
+      accountName: values.get("payment_telebirr_name") || "PULSE Health-Tech PLC",
+      enabled: values.get("payment_telebirr_enabled") !== "false",
+    },
+    {
+      id: "cbe",
+      label: "CBE — Commercial Bank of Ethiopia",
+      description: "Bank transfer via CBE account",
+      accountLabel: "CBE Account Number",
+      accountNumber: values.get("payment_cbe_number") || "1000 456 789 00",
+      accountName: values.get("payment_cbe_name") || "PULSE Health-Tech PLC",
+      enabled: values.get("payment_cbe_enabled") !== "false",
+    },
+  ];
+}
+
 // ─── AUTH ──────────────────────────────────────────────────────────────────────
 
 export async function signUp(email: string, password: string, name: string, role: string, phone?: string) {

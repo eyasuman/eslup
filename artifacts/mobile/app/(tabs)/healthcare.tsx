@@ -179,7 +179,7 @@ export default function HealthcareScreen() {
   } | null>(null);
   const [patientName, setPatientName] = useState("");
   const [patientAge, setPatientAge] = useState("");
-  const [patientGender, setPatientGender] = useState<"male" | "female" | "other">("male");
+  const [patientGender, setPatientGender] = useState<"male" | "female">("male");
   const [symptoms, setSymptoms] = useState("");
   const [assignedRadiologist, setAssignedRadiologist] = useState("");
   const [assignedRadiologistId, setAssignedRadiologistId] = useState("");
@@ -519,6 +519,14 @@ export default function HealthcareScreen() {
     setUploadedImage(null); setPatientName(""); setPatientAge(""); setScanType("");
     setBodyPart(""); setSymptoms(""); setUploadStep(1); setAssignedRadiologist(""); setAssignedRadiologistId(""); setUrgency("routine");
   };
+
+  const canSubmitScan = Boolean(
+    patientName.trim() &&
+    scanType &&
+    bodyPart &&
+    uploadedImage &&
+    assignedRadiologistId,
+  );
 
   const resetUploadModal = () => {
     setShowUploadModal(false);
@@ -1269,7 +1277,7 @@ export default function HealthcareScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.formLabel, { color: textMuted }]}>Gender</Text>
                         <View style={styles.genderRow}>
-                          {(["male", "female", "other"] as const).map((g) => (
+                          {(["male", "female"] as const).map((g) => (
                             <Pressable
                               key={g}
                               onPress={() => setPatientGender(g)}
@@ -1304,16 +1312,23 @@ export default function HealthcareScreen() {
                       </Pressable>
                       {showScanDropdown && (
                         <View style={[styles.dropdownList, { backgroundColor: isDark ? "#1E2B3D" : "#fff", borderColor: cardBorder }]}>
-                          {SCAN_TYPES.map((s) => (
-                            <Pressable
-                              key={s}
-                              onPress={() => { setScanType(s); setShowScanDropdown(false); }}
-                              style={[styles.dropdownItem, { borderBottomColor: cardBorder }]}
-                            >
-                              <Text style={[styles.dropdownItemText, { color: textPrimary }]}>{s}</Text>
-                              {scanType === s && <Feather name="check" size={14} color="#315d93" />}
-                            </Pressable>
-                          ))}
+                          <ScrollView
+                            style={{ maxHeight: 200 }}
+                            nestedScrollEnabled
+                            showsVerticalScrollIndicator
+                            keyboardShouldPersistTaps="handled"
+                          >
+                            {SCAN_TYPES.map((s) => (
+                              <Pressable
+                                key={s}
+                                onPress={() => { setScanType(s); setShowScanDropdown(false); }}
+                                style={[styles.dropdownItem, { borderBottomColor: cardBorder }]}
+                              >
+                                <Text style={[styles.dropdownItemText, { color: textPrimary }]}>{s}</Text>
+                                {scanType === s && <Feather name="check" size={14} color="#315d93" />}
+                              </Pressable>
+                            ))}
+                          </ScrollView>
                         </View>
                       )}
                     </View>
@@ -1332,16 +1347,23 @@ export default function HealthcareScreen() {
                       </Pressable>
                       {showBodyDropdown && (
                         <View style={[styles.dropdownList, { backgroundColor: isDark ? "#1E2B3D" : "#fff", borderColor: cardBorder }]}>
-                          {BODY_PARTS.map((b) => (
-                            <Pressable
-                              key={b}
-                              onPress={() => { setBodyPart(b); setShowBodyDropdown(false); }}
-                              style={[styles.dropdownItem, { borderBottomColor: cardBorder }]}
-                            >
-                              <Text style={[styles.dropdownItemText, { color: textPrimary }]}>{b}</Text>
-                              {bodyPart === b && <Feather name="check" size={14} color="#315d93" />}
-                            </Pressable>
-                          ))}
+                          <ScrollView
+                            style={{ maxHeight: 200 }}
+                            nestedScrollEnabled
+                            showsVerticalScrollIndicator
+                            keyboardShouldPersistTaps="handled"
+                          >
+                            {BODY_PARTS.map((b) => (
+                              <Pressable
+                                key={b}
+                                onPress={() => { setBodyPart(b); setShowBodyDropdown(false); }}
+                                style={[styles.dropdownItem, { borderBottomColor: cardBorder }]}
+                              >
+                                <Text style={[styles.dropdownItemText, { color: textPrimary }]}>{b}</Text>
+                                {bodyPart === b && <Feather name="check" size={14} color="#315d93" />}
+                              </Pressable>
+                            ))}
+                          </ScrollView>
                         </View>
                       )}
                     </View>
@@ -1389,7 +1411,7 @@ export default function HealthcareScreen() {
                     {/* Assign Radiologist — from Supabase approved providers who are radiologists */}
                     <View>
                       <Text style={[styles.formLabel, { color: textMuted }]}>
-                        Assign to Radiologist {radiologists.length > 0 ? `(${radiologists.length} available)` : ""}
+                         Assign to Radiologist * {radiologists.length > 0 ? `(${radiologists.length} available)` : ""}
                       </Text>
                       <Pressable
                         onPress={() => { setShowRadiologistDropdown(!showRadiologistDropdown); setShowScanDropdown(false); setShowBodyDropdown(false); }}
@@ -1402,22 +1424,10 @@ export default function HealthcareScreen() {
                       </Pressable>
                       {showRadiologistDropdown && (
                         <View style={[styles.dropdownList, { backgroundColor: isDark ? "#1E2B3D" : "#fff", borderColor: cardBorder }]}>
-                          <Pressable
-                            onPress={() => { setAssignedRadiologist(""); setAssignedRadiologistId(""); setShowRadiologistDropdown(false); }}
-                            style={[styles.dropdownItem, { borderBottomColor: cardBorder }]}
-                          >
-                            <View style={{ flex: 1 }}>
-                              <Text style={[styles.dropdownItemText, { color: textPrimary }]}>Choose later</Text>
-                              <Text style={[{ color: textMuted, fontSize: 11, fontFamily: "Inter_400Regular" }]}>
-                                A radiologist is required before submission
-                              </Text>
-                            </View>
-                            {!assignedRadiologist && <Feather name="check" size={14} color="#315d93" />}
-                          </Pressable>
                           {radiologists.length === 0 ? (
                             <View style={{ padding: 14 }}>
                               <Text style={[{ color: textMuted, fontSize: 13, fontFamily: "Inter_400Regular" }]}>
-                                No radiologists registered yet. Auto-assign will find the best match.
+                                No radiologists are available. A radiologist must be selected before submission.
                               </Text>
                             </View>
                           ) : (
@@ -1447,12 +1457,27 @@ export default function HealthcareScreen() {
                       )}
                     </View>
 
+                    {!assignedRadiologistId && (
+                      <Text style={[styles.requiredHint, { color: "#D97706" }]}>
+                        Select a radiologist to enable submission. The case will only appear in that radiologist&apos;s review queue.
+                      </Text>
+                    )}
+
                     <Pressable
                       onPress={submitScan}
-                      style={({ pressed }) => [styles.submitBtn, { opacity: pressed ? 0.9 : 1 }]}
+                      disabled={!canSubmitScan}
+                      style={({ pressed }) => [
+                        styles.submitBtn,
+                        {
+                          backgroundColor: canSubmitScan ? "#202937" : (isDark ? "rgba(255,255,255,0.12)" : "#CBD5E1"),
+                          opacity: pressed && canSubmitScan ? 0.9 : 1,
+                        },
+                      ]}
                     >
-                      <Feather name="upload-cloud" size={18} color="#fff" />
-                      <Text style={styles.submitBtnText}>Submit Scan for Review</Text>
+                      <Feather name="upload-cloud" size={18} color={canSubmitScan ? "#fff" : textMuted} />
+                      <Text style={[styles.submitBtnText, { color: canSubmitScan ? "#fff" : textMuted }]}>
+                        Submit Scan for Review
+                      </Text>
                     </Pressable>
                   </View>
                 )}
@@ -1703,6 +1728,7 @@ const styles = StyleSheet.create({
   urgencyRow: { flexDirection: "row", gap: 8 },
   urgencyOption: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
   urgencyOptionText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  requiredHint: { fontSize: 11, fontFamily: "Inter_500Medium", lineHeight: 16 },
   submitBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
     backgroundColor: "#202937", paddingVertical: 15, borderRadius: 14,

@@ -573,3 +573,18 @@ INSERT INTO emergency_contacts (id, name, phones, description, priority) VALUES
 ('e6','Police Emergency',ARRAY['991'],'National police emergency','medium'),
 ('e7','Fire Emergency',ARRAY['939'],'National fire emergency service','medium')
 ON CONFLICT (id) DO NOTHING;
+
+-- ── Seed: Admin-managed booking payment methods ──────────────
+-- Values are stored in dedicated settings rows so both the admin API and the
+-- public booking client can use the existing settings table without a schema change.
+INSERT INTO public.settings (
+  id, email, "fixedPlatformFee", "noticePeriodHours", "penaltyFee",
+  "reminderCadence", "updatedAt", "updatedBy", "inactivityTimeoutMinutes"
+) VALUES
+('payment_telebirr_number', '0912 345 678', 10, 24, 50, 'daily', NOW(), 'migration', 5),
+('payment_telebirr_name', 'PULSE Health-Tech PLC', 10, 24, 50, 'daily', NOW(), 'migration', 5),
+('payment_telebirr_enabled', 'true', 10, 24, 50, 'daily', NOW(), 'migration', 5),
+('payment_cbe_number', '1000 456 789 00', 10, 24, 50, 'daily', NOW(), 'migration', 5),
+('payment_cbe_name', 'PULSE Health-Tech PLC', 10, 24, 50, 'daily', NOW(), 'migration', 5),
+('payment_cbe_enabled', 'true', 10, 24, 50, 'daily', NOW(), 'migration', 5)
+ON CONFLICT (id) DO NOTHING;

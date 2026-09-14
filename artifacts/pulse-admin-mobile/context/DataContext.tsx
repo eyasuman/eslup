@@ -171,8 +171,12 @@ export interface PlatformSettings {
   cancellationNoticePeriodHours: number;
   cancellationPenaltyFee: number;
   reminderCadence: "weekly" | "daily" | "same-day";
-  paymentAccountNumber?: string;
-  paymentMethod?: string;
+  telebirrNumber: string;
+  telebirrName: string;
+  telebirrEnabled: boolean;
+  cbeNumber: string;
+  cbeName: string;
+  cbeEnabled: boolean;
 }
 
 function getApiBase(): string {
@@ -252,8 +256,12 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   cancellationNoticePeriodHours: 24,
   cancellationPenaltyFee: 50,
   reminderCadence: "daily",
-  paymentAccountNumber: "",
-  paymentMethod: "Bank Transfer",
+  telebirrNumber: "",
+  telebirrName: "",
+  telebirrEnabled: true,
+  cbeNumber: "",
+  cbeName: "",
+  cbeEnabled: true,
 };
 
 export function DataProvider({ children, enabled = true }: { children: ReactNode; enabled?: boolean }) {

@@ -20,8 +20,12 @@ export default function SettingsScreen() {
   const [noticePeriod, setNoticePeriod] = useState(String(settings.cancellationNoticePeriodHours));
   const [penalty, setPenalty] = useState(String(settings.cancellationPenaltyFee));
   const [cadence, setCadence] = useState(settings.reminderCadence);
-  const [paymentAccountNumber, setPaymentAccountNumber] = useState(settings.paymentAccountNumber ?? "");
-  const [paymentMethod, setPaymentMethod] = useState(settings.paymentMethod ?? "Bank Transfer");
+  const [telebirrNumber, setTelebirrNumber] = useState(settings.telebirrNumber);
+  const [telebirrName, setTelebirrName] = useState(settings.telebirrName);
+  const [telebirrEnabled, setTelebirrEnabled] = useState(settings.telebirrEnabled);
+  const [cbeNumber, setCbeNumber] = useState(settings.cbeNumber);
+  const [cbeName, setCbeName] = useState(settings.cbeName);
+  const [cbeEnabled, setCbeEnabled] = useState(settings.cbeEnabled);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [newRegEnabled, setNewRegEnabled] = useState(true);
   const [reviewsEnabled, setReviewsEnabled] = useState(true);
@@ -37,14 +41,21 @@ export default function SettingsScreen() {
     if (isNaN(feeNum) || feeNum < 0 || feeNum > 100) {
       Alert.alert("Invalid Fee", "Platform fee must be 0–100%."); return;
     }
+    if (!telebirrEnabled && !cbeEnabled) {
+      Alert.alert("Payment Method Required", "Keep at least one payment method enabled."); return;
+    }
     setSaving(true);
     await updateSettings({
       platformFee: feeNum,
       cancellationNoticePeriodHours: noticeNum,
       cancellationPenaltyFee: penaltyNum,
       reminderCadence: cadence,
-      paymentAccountNumber: paymentAccountNumber.trim(),
-      paymentMethod,
+      telebirrNumber: telebirrNumber.trim(),
+      telebirrName: telebirrName.trim(),
+      telebirrEnabled,
+      cbeNumber: cbeNumber.trim(),
+      cbeName: cbeName.trim(),
+      cbeEnabled,
     });
     setSaving(false);
     Alert.alert("Saved", "Platform settings updated successfully.");
@@ -135,39 +146,59 @@ export default function SettingsScreen() {
       </SectionCard>
 
       <SectionCard title="Payment Details" icon="credit-card" colors={colors}>
-        <FieldRow label="Payment Account Number" description="Account number clients use to pay" colors={colors}>
+        <ToggleRow label="Telebirr" description="Show Telebirr during booking" value={telebirrEnabled} onToggle={() => setTelebirrEnabled(!telebirrEnabled)} colors={colors} />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <FieldRow label="Merchant Number" description="Telebirr number clients copy" colors={colors}>
           <View style={[styles.inputBox, { backgroundColor: colors.background, borderColor: colors.border, flex: 1 }]}>
             <TextInput
               style={[styles.input, { color: colors.foreground, textAlign: "left" }]}
-              value={paymentAccountNumber}
-              onChangeText={setPaymentAccountNumber}
-              placeholder="e.g. AE07 0123 4567 8901 2345 678"
+              value={telebirrNumber}
+              onChangeText={setTelebirrNumber}
+              placeholder="e.g. 0912 345 678"
               placeholderTextColor={colors.mutedForeground}
-              autoCapitalize="none"
+              keyboardType="phone-pad"
             />
           </View>
         </FieldRow>
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <View style={[styles.fieldRow, { paddingBottom: 4 }]}>
-          <View style={styles.fieldInfo}>
-            <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Payment Method</Text>
-            <Text style={[styles.fieldDesc, { color: colors.mutedForeground }]}>How clients should pay</Text>
+        <FieldRow label="Account Name" description="Name shown under the Telebirr number" colors={colors}>
+          <View style={[styles.inputBox, { backgroundColor: colors.background, borderColor: colors.border, flex: 1 }]}>
+            <TextInput
+              style={[styles.input, { color: colors.foreground, textAlign: "left" }]}
+              value={telebirrName}
+              onChangeText={setTelebirrName}
+              placeholder="PULSE Health-Tech PLC"
+              placeholderTextColor={colors.mutedForeground}
+            />
           </View>
-        </View>
-        <View style={styles.paymentMethodRow}>
-          {(["Bank Transfer", "Card", "Cash", "Apple Pay", "Google Pay"] as const).map((m) => (
-            <Pressable
-              key={m}
-              onPress={() => setPaymentMethod(m)}
-              style={[
-                styles.paymentMethodChip,
-                { backgroundColor: paymentMethod === m ? colors.primary : colors.background, borderColor: paymentMethod === m ? colors.primary : colors.border },
-              ]}
-            >
-              <Text style={[styles.paymentMethodText, { color: paymentMethod === m ? "#fff" : colors.mutedForeground }]}>{m}</Text>
-            </Pressable>
-          ))}
-        </View>
+        </FieldRow>
+        <View style={[styles.methodSeparator, { backgroundColor: colors.border }]} />
+        <ToggleRow label="CBE Bank Transfer" description="Show CBE during booking" value={cbeEnabled} onToggle={() => setCbeEnabled(!cbeEnabled)} colors={colors} />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <FieldRow label="Account Number" description="CBE account clients copy" colors={colors}>
+          <View style={[styles.inputBox, { backgroundColor: colors.background, borderColor: colors.border, flex: 1 }]}>
+            <TextInput
+              style={[styles.input, { color: colors.foreground, textAlign: "left" }]}
+              value={cbeNumber}
+              onChangeText={setCbeNumber}
+              placeholder="e.g. 1000 456 789 00"
+              placeholderTextColor={colors.mutedForeground}
+              keyboardType="number-pad"
+            />
+          </View>
+        </FieldRow>
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+        <FieldRow label="Account Name" description="Name shown under the CBE account" colors={colors}>
+          <View style={[styles.inputBox, { backgroundColor: colors.background, borderColor: colors.border, flex: 1 }]}>
+            <TextInput
+              style={[styles.input, { color: colors.foreground, textAlign: "left" }]}
+              value={cbeName}
+              onChangeText={setCbeName}
+              placeholder="PULSE Health-Tech PLC"
+              placeholderTextColor={colors.mutedForeground}
+            />
+          </View>
+        </FieldRow>
       </SectionCard>
 
       <Pressable testID="admin-sign-out" onPress={() => void signOut()} style={[styles.signOutButton, { borderColor: colors.border }]}>
@@ -275,9 +306,7 @@ const styles = StyleSheet.create({
   cadenceText: { fontSize: 11, fontWeight: "600" },
   signOutButton: { flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", paddingVertical: 14, borderRadius: 12, borderWidth: 1 },
   signOutLabel: { fontSize: 13, fontWeight: "700" },
-  paymentMethodRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 14, paddingBottom: 14 },
-  paymentMethodChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1 },
-  paymentMethodText: { fontSize: 11, fontWeight: "600" },
+  methodSeparator: { height: 8 },
   infoCard: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
   infoTitle: { fontSize: 13, fontWeight: "600", padding: 14, paddingBottom: 10 },
   infoRow: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 11 },
