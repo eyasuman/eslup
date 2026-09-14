@@ -4,7 +4,6 @@ import * as Crypto from "expo-crypto";
 import { fetch as expoFetch } from "expo/fetch";
 import { Platform } from "react-native";
 import { Hospital } from "@/data/ethiopianHospitals";
-import { normalizeLocationCoordinate } from "@/lib/mapLocations";
 import { isValidLocationCoordinates } from "@/lib/mapLocations";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -80,61 +79,6 @@ export function subscribeToPaymentMethodChanges(onChange: () => void) {
       onChange,
     )
     .subscribe();
-}
-
-export type PaymentMethodConfig = {
-  id: "telebirr" | "cbe";
-  label: string;
-  description: string;
-  accountLabel: string;
-  accountNumber: string;
-  accountName: string;
-  enabled: boolean;
-};
-
-type PlatformPaymentMethodsRow = {
-  global_telebirr_number: string;
-  global_telebirr_name: string;
-  global_cbe_number: string;
-  global_cbe_name: string;
-};
-
-export async function getPaymentMethods(): Promise<PaymentMethodConfig[]> {
-  const { data, error } = await supabase
-    .from("platform_payment_methods")
-    .select(
-      "global_telebirr_number,global_telebirr_name,global_cbe_number,global_cbe_name",
-    )
-    .eq("id", true)
-    .single<PlatformPaymentMethodsRow>();
-
-  if (error) throw error;
-
-  const telebirrNumber = data.global_telebirr_number.trim();
-  const telebirrName = data.global_telebirr_name.trim();
-  const cbeNumber = data.global_cbe_number.trim();
-  const cbeName = data.global_cbe_name.trim();
-
-  return [
-    {
-      id: "telebirr",
-      label: "Telebirr",
-      description: "Ethiopian mobile money transfer",
-      accountLabel: "Telebirr Merchant Number",
-      accountNumber: telebirrNumber,
-      accountName: telebirrName,
-      enabled: telebirrNumber.length > 0,
-    },
-    {
-      id: "cbe",
-      label: "CBE — Commercial Bank of Ethiopia",
-      description: "Bank transfer via CBE account",
-      accountLabel: "CBE Account Number",
-      accountNumber: cbeNumber,
-      accountName: cbeName,
-      enabled: cbeNumber.length > 0,
-    },
-  ];
 }
 
 // ─── AUTH ──────────────────────────────────────────────────────────────────────
@@ -1411,8 +1355,8 @@ export function institutionToHospital(inst: Institution): Hospital {
     distanceKm: inst.distanceKm ?? 0,
     open24h: inst.open24h ?? false,
     phone: inst.phone ?? "",
-    lat: normalizeLocationCoordinate(inst.lat),
-    lng: normalizeLocationCoordinate(inst.lng),
+    lat: inst.lat,
+    lng: inst.lng,
     categories,
     services: inst.services ?? [],
     color: inst.color ?? "#315d93",
@@ -1512,17 +1456,6 @@ export async function upsertInstitution(inst: Institution) {
   const { error } = await supabase
     .from("institute_pulse")
     .upsert(payload, { onConflict: "userId" });
-  if (error) throw error;
-}
-
-export async function updateInstitutionLocation(userId: string, lat: number, lng: number) {
-  if (!isValidLocationCoordinates(lat, lng)) {
-    throw new Error("Institute location requires a valid latitude and longitude.");
-  }
-  const { error } = await supabase
-    .from("institute_pulse")
-    .update({ lat, lng, updatedAt: new Date().toISOString() })
-    .eq("userId", userId);
   if (error) throw error;
 }
 

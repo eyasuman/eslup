@@ -12,5 +12,3 @@
 - [Android AAB build route](android-aab-build-route.md) — Expo Launch currently marks Play Store unsupported; prepare EAS config in the app package and build Android through Expo.dev.
 - [GitHub push credential recovery](github-push-credential-recovery.md) — when HTTPS pushes reject stale credentials, use Replit's authenticated `gh auth setup-git`, then retry normally.
 - [Expo Router context boundaries](expo-router-context-boundaries.md) — shared providers must wrap the stable root navigation tree, not conditional auth branches.
-- [Mixed Expo SDK Metro isolation](mixed-expo-sdk-metro-isolation.md) — pin native singletons per app when a pnpm workspace contains Expo apps on different SDK generations.
-- [Platform payment source](public-payment-settings-access.md) — booking must read the dedicated platform payment table, never phone-like values from general settings.

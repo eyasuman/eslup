@@ -1,0 +1,250 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: video
+    description: Appointment-authorized video consultation operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /video/sessions:
+    post:
+      operationId: createVideoSession
+      tags: [video]
+      summary: Create or join a video consultation session
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVideoSessionRequest"
+      responses:
+        "200":
+          description: Authorized video session credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoSession"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Appointment is not eligible or the user is not a participant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /video/invitations:
+    post:
+      operationId: createVideoInvitation
+      tags: [video]
+      summary: Notify the provider for an eligible appointment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVideoInvitationRequest"
+      responses:
+        "200":
+          description: Existing or newly created appointment invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoInvitation"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Appointment is not eligible or the caller is not its patient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /video/sessions/{sessionId}/end:
+    post:
+      operationId: endVideoSession
+      tags: [video]
+      summary: End a video consultation session
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session ended or was already ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoSessionEndResult"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: User is not a consultation participant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    CreateVideoSessionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        appointmentId:
+          type: string
+        callId:
+          type: string
+      required:
+        - appointmentId
+        - callId
+    CreateVideoInvitationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        appointmentId:
+          type: string
+      required:
+        - appointmentId
+    VideoInvitation:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        doctor_id:
+          type: string
+        patient_id:
+          type: string
+        patient_name:
+          type: string
+        room_name:
+          type: string
+        appointment_id:
+          type: string
+        status:
+          type: string
+          enum: [waiting, accepted, rejected, ended]
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - doctor_id
+        - patient_id
+        - patient_name
+        - room_name
+        - appointment_id
+        - status
+        - created_at
+    VideoSession:
+      type: object
+      additionalProperties: false
+      properties:
+        sessionId:
+          type: string
+        appId:
+          type: integer
+        roomId:
+          type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        token:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+      required:
+        - sessionId
+        - appId
+        - roomId
+        - userId
+        - userName
+        - token
+        - expiresAt
+    VideoSessionEndResult:
+      type: object
+      additionalProperties: false
+      properties:
+        ended:
+          type: boolean
+      required:
+        - ended
+    ApiError:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+      required:
+        - error
+

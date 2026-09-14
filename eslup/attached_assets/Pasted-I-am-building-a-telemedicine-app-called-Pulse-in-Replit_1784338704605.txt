@@ -1,0 +1,28 @@
+I am building a telemedicine app called "Pulse" in Replit, using Supabase as the backend/database. I need help implementing two major features with full Supabase data integration (sending and receiving all relevant data).
+
+Please review my existing codebase and implement the following features:
+
+### 1. Dynamic Institutes List to Doctors Flow
+- **Explore Page:** I have a section displaying many institutes. Please ensure this entire list/grid of institutes is fetched dynamically from my Supabase `institutes` table.
+- **Clickable Interaction:** Every single institute in this list must be clickable. 
+- **Navigation & Routing:** Clicking any institute must route the user to a dedicated view or page (e.g., `/institutes/[id]` or a dynamically filtered view) passing that specific institute's unique ID.
+- **Supabase Integration for Doctors:** 
+  - On that destination view, fetch and display all doctors associated with that specific institute from Supabase.
+  - The database query must filter the `doctors` table where `institute_id` matches the clicked institute's ID.
+  - If the database schema needs an update to link many institutes to their respective doctors, please generate the required Supabase migration or update the schema logic.
+
+### 2. "Find Nearby" Button to Providers Map View
+- **Button Action:** Add a "Find Nearby" button to the Explore page.
+- **Geolocation:** When clicked, use the browser's Geolocation API (`navigator.geolocation.getCurrentPosition`) to capture the user's current latitude and longitude.
+- **Navigation & State:** Once coordinates are captured, automatically redirect the user to the "Providers" page/tab and force the view to change to "Map View" (instead of a standard list view).
+- **Supabase & Map Integration:** 
+  - Pass the user's coordinates to the Providers page via URL query parameters or global state.
+  - Center the map view on those coordinates.
+  - Query Supabase to fetch nearby providers/doctors. If PostGIS/spatial data is enabled, write a radius-based query. If not, fetch the coordinates of the providers from the database and map them relative to the user's location.
+
+### Strict Technical Requirements:
+- All data fetching (the list of many institutes, the doctors, and the map providers) must run seamlessly through the Supabase JS client.
+- Handle loading states and error states gracefully (e.g., if a user denies location permissions, show a friendly fallback map view).
+- Ensure the routing matches the existing routing architecture of this project.
+
+Please inspect my current project structure, update the necessary files, and write clean, modular code to make this work.

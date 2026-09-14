@@ -1,0 +1,71 @@
+// PULSE Brand Colors
+// Primary dark: #202937 | Primary blue: #315d93
+// Light mode: white bg, gradient text
+// Dark mode: gradient bg, white text
+
+const colors = {
+  light: {
+    text: "#202937",
+    tint: "#315d93",
+    background: "#FFFFFF",
+    foreground: "#202937",
+    card: "#F4F7FB",
+    cardForeground: "#202937",
+    primary: "#315d93",
+    primaryForeground: "#ffffff",
+    secondary: "#E8EEF7",
+    secondaryForeground: "#202937",
+    muted: "#F1F5F9",
+    mutedForeground: "#64748B",
+    accent: "#315d93",
+    accentForeground: "#ffffff",
+    destructive: "#DC2626",
+    destructiveForeground: "#ffffff",
+    border: "#DDE3EE",
+    input: "#E8EEF7",
+    success: "#059669",
+    warning: "#D97706",
+    info: "#315d93",
+    glass: "rgba(49, 93, 147, 0.08)",
+    glassLight: "rgba(49, 93, 147, 0.12)",
+    darkNavy: "#202937",
+    brandBlue: "#315d93",
+    tabBar: "#FFFFFF",
+    tabBorder: "#E2E8F0",
+  },
+  dark: {
+    text: "#FFFFFF",
+    tint: "#7FA8D8",
+    background: "#202937",
+    foreground: "#FFFFFF",
+    card: "rgba(255,255,255,0.08)",
+    cardForeground: "#FFFFFF",
+    primary: "#7FA8D8",
+    primaryForeground: "#202937",
+    secondary: "rgba(255,255,255,0.12)",
+    secondaryForeground: "#E2E8F0",
+    muted: "rgba(255,255,255,0.06)",
+    mutedForeground: "#94A3B8",
+    accent: "#7FA8D8",
+    accentForeground: "#202937",
+    destructive: "#EF4444",
+    destructiveForeground: "#ffffff",
+    border: "rgba(255,255,255,0.12)",
+    input: "rgba(255,255,255,0.1)",
+    success: "#34D399",
+    warning: "#FBBF24",
+    info: "#7FA8D8",
+    glass: "rgba(255,255,255,0.08)",
+    glassLight: "rgba(127,168,216,0.15)",
+    darkNavy: "#202937",
+    brandBlue: "#315d93",
+    tabBar: "#1a2235",
+    tabBorder: "rgba(255,255,255,0.1)",
+  },
+  radius: 15,
+  // Gradient stops
+  gradientDark: ["#202937", "#315d93"] as const,
+  gradientLight: ["#202937", "#315d93"] as const, // for text masking
+};
+
+export default colors;

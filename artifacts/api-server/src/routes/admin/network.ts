@@ -167,39 +167,15 @@ router.get("/settings",async(req,res):Promise<void>=>{try{
   let {data,error}=await admin.from("settings").select("*").eq("id","singleton").maybeSingle();
   if(error)throw error;
   if(!data){const fallback=await admin.from("settings").select("*").order("id").limit(1).maybeSingle();if(fallback.error)throw fallback.error;data=fallback.data;}
-  const paymentIds=["payment_telebirr_number","payment_telebirr_name","payment_telebirr_enabled","payment_cbe_number","payment_cbe_name","payment_cbe_enabled"];
-  const payment=await admin.from("settings").select("id,email").in("id",paymentIds);
-  if(payment.error)throw payment.error;
-  const values=new Map((payment.data??[]).map((row:any)=>[row.id,row.email??""]));
-  res.json({...platformSettings(data),
-    telebirrNumber:values.get("payment_telebirr_number")??"",
-    telebirrName:values.get("payment_telebirr_name")??"",
-    telebirrEnabled:values.get("payment_telebirr_enabled")!=="false",
-    cbeNumber:values.get("payment_cbe_number")??"",
-    cbeName:values.get("payment_cbe_name")??"",
-    cbeEnabled:values.get("payment_cbe_enabled")!=="false"});
+  res.json(platformSettings(data));
 }catch(e){failure(req,res,e);}});
 router.put("/settings",async(req,res):Promise<void>=>{if(typeof req.body?.platformFee!=="number")return invalid(res,"platformFee is required");try{
-  if(!req.body?.telebirrEnabled&&!req.body?.cbeEnabled)return invalid(res,"At least one payment method must be enabled");
   const update={fixedPlatformFee:req.body.platformFee,noticePeriodHours:req.body.cancellationNoticePeriodHours,
     penaltyFee:req.body.cancellationPenaltyFee,reminderCadence:req.body.reminderCadence,updatedAt:new Date().toISOString(),updatedBy:req.res?.locals?.adminUserId??"admin"};
-  const now=new Date().toISOString(),updatedBy=req.res?.locals?.adminUserId??"admin";
   const {data,error}=await admin.from("settings").upsert({id:"singleton",...update}).select().single();
   if(error)throw error;
-  const paymentRows=[
-    {id:"payment_telebirr_number",email:String(req.body.telebirrNumber??"").trim(),updatedAt:now,updatedBy},
-    {id:"payment_telebirr_name",email:String(req.body.telebirrName??"").trim(),updatedAt:now,updatedBy},
-    {id:"payment_telebirr_enabled",email:String(!!req.body.telebirrEnabled),updatedAt:now,updatedBy},
-    {id:"payment_cbe_number",email:String(req.body.cbeNumber??"").trim(),updatedAt:now,updatedBy},
-    {id:"payment_cbe_name",email:String(req.body.cbeName??"").trim(),updatedAt:now,updatedBy},
-    {id:"payment_cbe_enabled",email:String(!!req.body.cbeEnabled),updatedAt:now,updatedBy},
-  ];
-  const paymentUpdate=await admin.from("settings").upsert(paymentRows);
-  if(paymentUpdate.error)throw paymentUpdate.error;
   await audit(req,"updated platform settings","settings");
-  res.json({...platformSettings(data),
-    telebirrNumber:paymentRows[0].email,telebirrName:paymentRows[1].email,telebirrEnabled:req.body.telebirrEnabled,
-    cbeNumber:paymentRows[3].email,cbeName:paymentRows[4].email,cbeEnabled:req.body.cbeEnabled});
+  res.json(platformSettings(data));
 }catch(e){failure(req,res,e);}});
 router.patch("/settings/gateway-password",async(req,res):Promise<void>=>{if(typeof req.body?.password!=="string"||req.body.password.length<4)return invalid(res,"password must be at least 4 characters");try{const {data,error}=await admin.from("settings").select("id").order("id").limit(1).maybeSingle();if(error)throw error;if(!data){res.status(404).json({error:"Settings not found"});return;}const {error:updateError}=await admin.from("settings").update({gatewayPassword:req.body.password}).eq("id",data.id);if(updateError)throw updateError;res.json({success:true});}catch(e){failure(req,res,e);}});
 
