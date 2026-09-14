@@ -31,22 +31,6 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 /**
  * Fetch a system setting by its key
  */
-export async function getSetting(key: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("settings")
-    .select("*");
-  
-  if (error) return null;
-  
-  const setting = data?.find((s: any) => {
-    const k = (s.key || s.name || s.setting_key || s.id || s.identifier || s.key_name || "").toLowerCase();
-    return k === key.toLowerCase();
-  });
-
-  const val = setting?.value || setting?.val || setting?.setting_value || setting?.content || setting?.data || setting?.v || setting?.json_data;
-  return val ? String(val) : null;
-}
-
 export interface PlatformPaymentMethods {
   telebirr: { number: string; name: string };
   cbe: { number: string; name: string };
@@ -91,7 +75,7 @@ export function subscribeToPaymentMethodChanges(onChange: () => void) {
     .channel(uniqueTopic("settings:payment-methods"))
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "settings" },
+      { event: "*", schema: "public", table: "platform_payment_methods" },
       onChange,
     )
     .subscribe();
