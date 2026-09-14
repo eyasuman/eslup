@@ -115,6 +115,8 @@ export async function getPaymentMethods(): Promise<PaymentMethodConfig[]> {
       row.email ?? "",
     ]),
   );
+  const telebirrNumber = values.get("payment_telebirr_number")?.trim() ?? "";
+  const cbeNumber = values.get("payment_cbe_number")?.trim() ?? "";
 
   return [
     {
@@ -122,18 +124,22 @@ export async function getPaymentMethods(): Promise<PaymentMethodConfig[]> {
       label: "Telebirr",
       description: "Ethiopian mobile money transfer",
       accountLabel: "Telebirr Merchant Number",
-      accountNumber: values.get("payment_telebirr_number") || "0912 345 678",
+      accountNumber: telebirrNumber,
       accountName: values.get("payment_telebirr_name") || "PULSE Health-Tech PLC",
-      enabled: values.get("payment_telebirr_enabled") !== "false",
+      enabled:
+        telebirrNumber.length > 0 &&
+        values.get("payment_telebirr_enabled") !== "false",
     },
     {
       id: "cbe",
       label: "CBE — Commercial Bank of Ethiopia",
       description: "Bank transfer via CBE account",
       accountLabel: "CBE Account Number",
-      accountNumber: values.get("payment_cbe_number") || "1000 456 789 00",
+      accountNumber: cbeNumber,
       accountName: values.get("payment_cbe_name") || "PULSE Health-Tech PLC",
-      enabled: values.get("payment_cbe_enabled") !== "false",
+      enabled:
+        cbeNumber.length > 0 &&
+        values.get("payment_cbe_enabled") !== "false",
     },
   ];
 }
