@@ -15,7 +15,8 @@
       "environment": "production",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "eslup-tadelesiyummide.replit.app"
+        "EXPO_PUBLIC_DOMAIN": "eslup-tadelesiyummide.replit.app",
+        "EXPO_PUBLIC_PAYMENT_METHODS_API_URL": "https://pulse-data-analyzer.replit.app/api/settings/payment-methods"
       },
       "android": {
         "buildType": "app-bundle"

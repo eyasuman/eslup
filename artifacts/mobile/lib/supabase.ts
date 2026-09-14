@@ -47,6 +47,56 @@ export async function getSetting(key: string): Promise<string | null> {
   return val ? String(val) : null;
 }
 
+export interface PlatformPaymentMethods {
+  telebirr: { number: string; name: string };
+  cbe: { number: string; name: string };
+}
+
+const PAYMENT_METHODS_URL = process.env.EXPO_PUBLIC_PAYMENT_METHODS_API_URL
+  ?? "https://pulse-data-analyzer.replit.app/api/settings/payment-methods";
+
+function paymentValue(payload: Record<string, unknown>, snakeKey: string, camelKey: string): string {
+  const value = payload[snakeKey] ?? payload[camelKey];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export async function getPlatformPaymentMethods(): Promise<PlatformPaymentMethods> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await expoFetch(PAYMENT_METHODS_URL, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`Payment settings request failed (${response.status})`);
+    const payload = await response.json() as Record<string, unknown>;
+    return {
+      telebirr: {
+        number: paymentValue(payload, "global_telebirr_number", "globalTelebirrNumber"),
+        name: paymentValue(payload, "global_telebirr_name", "globalTelebirrName"),
+      },
+      cbe: {
+        number: paymentValue(payload, "global_cbe_number", "globalCbeNumber"),
+        name: paymentValue(payload, "global_cbe_name", "globalCbeName"),
+      },
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export function subscribeToPaymentMethodChanges(onChange: () => void) {
+  return supabase
+    .channel(uniqueTopic("settings:payment-methods"))
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "settings" },
+      onChange,
+    )
+    .subscribe();
+}
+
 // ─── AUTH ──────────────────────────────────────────────────────────────────────
 
 export async function signUp(email: string, password: string, name: string, role: string, phone?: string) {

@@ -19,7 +19,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp, Booking } from "@/context/AppContext";
-import { createAppointment, createNotification, deleteUpload, getApprovedDoctors, getSetting, uploadPaymentProof } from "@/lib/supabase";
+import { createAppointment, createNotification, deleteUpload, getApprovedDoctors, getPlatformPaymentMethods, subscribeToPaymentMethodChanges, unsubscribeChannel, uploadPaymentProof } from "@/lib/supabase";
 import { useColors } from "@/hooks/useColors";
 import { formatEtDatePill } from "@/lib/ethiopianCalendar";
 
@@ -31,10 +31,14 @@ const TIME_SLOTS = {
 
 const DAYS_AHEAD = 14;
 
-// Fallback payment accounts — overridden by per-provider data from Supabase
-const FALLBACK_PAYMENT = {
-  telebirr: { number: "0912 345 678", name: "PULSE Health-Tech PLC" },
-  cbe: { number: "1000 456 789 00", name: "PULSE Health-Tech PLC" },
+type PaymentAccounts = {
+  telebirr: { number: string; name: string };
+  cbe: { number: string; name: string };
+};
+
+const EMPTY_PAYMENT_ACCOUNTS: PaymentAccounts = {
+  telebirr: { number: "", name: "" },
+  cbe: { number: "", name: "" },
 };
 
 function getNextDates(n: number): Date[] {
@@ -97,42 +101,48 @@ export default function BookingScreen() {
     hospital: supabaseDoctor.city ?? "Addis Ababa",
     price: (supabaseDoctor.consultationFee ?? 600) * 100,
     currency: "ETB",
-    telebirrMerchant: supabaseDoctor.telebirrMerchant ?? supabaseDoctor.phone ?? null,
+    telebirrMerchant: supabaseDoctor.telebirrMerchant ?? null,
     cbeAccount: supabaseDoctor.cbeAccount ?? null,
   } : null;
 
-  const [globalAccounts, setGlobalAccounts] = useState<any>(FALLBACK_PAYMENT);
+  const [globalAccounts, setGlobalAccounts] = useState<PaymentAccounts>(EMPTY_PAYMENT_ACCOUNTS);
+  const [paymentSettingsLoading, setPaymentSettingsLoading] = useState(true);
+  const [paymentSettingsError, setPaymentSettingsError] = useState<string | null>(null);
+  const paymentRequestId = React.useRef(0);
 
-  useEffect(() => {
-    async function fetchGlobalAccounts() {
-      const tbNum = await getSetting('global_telebirr_number');
-      const tbName = await getSetting('global_telebirr_name');
-      const cbeNum = await getSetting('global_cbe_number');
-      const cbeName = await getSetting('global_cbe_name');
-      
-      setGlobalAccounts({
-        telebirr: { 
-          number: tbNum || FALLBACK_PAYMENT.telebirr.number, 
-          name: tbName || FALLBACK_PAYMENT.telebirr.name 
-        },
-        cbe: { 
-          number: cbeNum || FALLBACK_PAYMENT.cbe.number, 
-          name: cbeName || FALLBACK_PAYMENT.cbe.name 
-        }
-      });
+  const refreshPaymentAccounts = React.useCallback(async () => {
+    const requestId = ++paymentRequestId.current;
+    setPaymentSettingsLoading(true);
+    try {
+      const accounts = await getPlatformPaymentMethods();
+      if (requestId !== paymentRequestId.current) return;
+      setGlobalAccounts(accounts);
+      setPaymentSettingsError(null);
+    } catch {
+      if (requestId !== paymentRequestId.current) return;
+      setPaymentSettingsError("Payment account details are temporarily unavailable.");
+    } finally {
+      if (requestId === paymentRequestId.current) setPaymentSettingsLoading(false);
     }
-    fetchGlobalAccounts();
   }, []);
 
+  useEffect(() => {
+    void refreshPaymentAccounts();
+    const channel = subscribeToPaymentMethodChanges(() => {
+      void refreshPaymentAccounts();
+    });
+    return () => unsubscribeChannel(channel);
+  }, [refreshPaymentAccounts]);
+
   // Per-provider payment accounts (fall back to platform accounts if provider hasn't set their own)
-  const paymentAccounts = {
+  const paymentAccounts: PaymentAccounts = {
     telebirr: {
-      number: doctor?.telebirrMerchant ?? globalAccounts.telebirr.number,
-      name: doctor ? doctor.name : globalAccounts.telebirr.name,
+      number: doctor?.telebirrMerchant?.trim() || globalAccounts.telebirr.number,
+      name: doctor?.telebirrMerchant?.trim() ? doctor.name : globalAccounts.telebirr.name,
     },
     cbe: {
-      number: doctor?.cbeAccount ?? globalAccounts.cbe.number,
-      name: doctor ? doctor.name : globalAccounts.cbe.name,
+      number: doctor?.cbeAccount?.trim() || globalAccounts.cbe.number,
+      name: doctor?.cbeAccount?.trim() ? doctor.name : globalAccounts.cbe.name,
     },
   };
 
@@ -142,7 +152,20 @@ export default function BookingScreen() {
   const [consultType, setConsultType] = useState<"video" | "phone" | "homecare">("video");
   const [paymentMethod, setPaymentMethod] = useState<"telebirr" | "cbe">("telebirr");
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+
+  useEffect(() => {
+    if (step === 3) void refreshPaymentAccounts();
+  }, [step, refreshPaymentAccounts]);
+
+  useEffect(() => {
+    if (paymentAccounts[paymentMethod].number) return;
+    if (paymentAccounts.telebirr.number) setPaymentMethod("telebirr");
+    else if (paymentAccounts.cbe.number) setPaymentMethod("cbe");
+  }, [paymentAccounts.telebirr.number, paymentAccounts.cbe.number, paymentMethod]);
+
+  const currentPaymentAccount = paymentAccounts[paymentMethod];
   const [proofImage, setProofImage] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [paymentRecipientSnapshot, setPaymentRecipientSnapshot] = useState<{ method: "telebirr" | "cbe"; number: string; name: string } | null>(null);
   const [senderName, setSenderName] = useState(user?.name ?? "");
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
@@ -194,6 +217,7 @@ export default function BookingScreen() {
           name: asset.fileName ?? "payment-proof.jpg",
           type: asset.mimeType ?? "image/jpeg",
         });
+        setPaymentRecipientSnapshot({ method: paymentMethod, ...currentPaymentAccount });
         if (!paidAmount) setPaidAmount(amountFormatted);
       }
     } catch {
@@ -202,7 +226,17 @@ export default function BookingScreen() {
   };
 
   const handleSubmitPayment = async () => {
-    if (!proofImage) { Alert.alert("Proof Required", "Please upload a screenshot or photo of your payment."); return; }
+    if (!currentPaymentAccount.number || !currentPaymentAccount.name) {
+      Alert.alert("Payment Unavailable", "This payment method is not configured. Please select another method or contact support.");
+      return;
+    }
+    if (!proofImage || !paymentRecipientSnapshot) { Alert.alert("Proof Required", "Please upload a screenshot or photo of your payment."); return; }
+    if (paymentRecipientSnapshot.method !== paymentMethod
+      || paymentRecipientSnapshot.number !== currentPaymentAccount.number
+      || paymentRecipientSnapshot.name !== currentPaymentAccount.name) {
+      Alert.alert("Payment Details Changed", "The recipient account changed after you selected your proof. Confirm the current account and upload the proof again.");
+      return;
+    }
     if (!senderName.trim()) { Alert.alert("Missing Info", "Please enter the sender name."); return; }
     if (!user?.id) {
       Alert.alert("Sign In Required", "Please sign in before submitting payment. Payment proofs are stored privately under your account.");
@@ -274,7 +308,7 @@ export default function BookingScreen() {
           paymentMethod: paymentMethod,
           transactionId: transactionId || "N/A",
           senderName: senderName,
-          notes: (paymentMethod === "telebirr" ? "Telebirr" : "CBE") + " | Sender: " + senderName + (paymentNote ? " | Note: " + paymentNote : ""),
+          notes: (paymentMethod === "telebirr" ? "Telebirr" : "CBE") + " | Recipient: " + paymentRecipientSnapshot.number + " (" + paymentRecipientSnapshot.name + ") | Sender: " + senderName + (paymentNote ? " | Note: " + paymentNote : ""),
       });
       newBooking.id = appointment.id;
       await addBooking(newBooking);
@@ -653,30 +687,48 @@ export default function BookingScreen() {
 
               {/* Payment Method */}
               <Text style={[styles.stepTitle, { color: textPrimary }]}>Select Payment Method</Text>
+              {paymentSettingsLoading && (
+                <Text style={[styles.optionSub, { color: textMuted }]}>Refreshing payment account details…</Text>
+              )}
+              {paymentSettingsError && !paymentAccounts.telebirr.number && !paymentAccounts.cbe.number && (
+                <Text style={[styles.optionSub, { color: "#DC2626" }]}>{paymentSettingsError}</Text>
+              )}
               {([
                 { id: "telebirr" as const, icon: "smartphone" as const, label: "Telebirr", sub: "Ethiopian mobile money transfer", accent: "#059669" },
                 { id: "cbe" as const, icon: "credit-card" as const, label: "CBE — Commercial Bank of Ethiopia", sub: "Bank transfer via CBE account", accent: "#1E40AF" },
               ]).map((pm) => {
                 const active = paymentMethod === pm.id;
+                const available = Boolean(paymentAccounts[pm.id].number && paymentAccounts[pm.id].name);
                 return (
                   <Pressable
                     key={pm.id}
-                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setPaymentMethod(pm.id); }}
-                    style={[styles.optionRow, { backgroundColor: active ? "#202937" : cardBg, borderColor: active ? "#315d93" : borderCol }]}
+                    disabled={!available}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setPaymentMethod(pm.id);
+                      setProofImage(null);
+                      setPaymentRecipientSnapshot(null);
+                    }}
+                    style={[styles.optionRow, { backgroundColor: active && available ? "#202937" : cardBg, borderColor: active && available ? "#315d93" : borderCol, opacity: available ? 1 : 0.5 }]}
                   >
                     <View style={[styles.optionIcon, { backgroundColor: active ? "rgba(49,93,147,0.4)" : pm.accent + "15" }]}>
                       <Feather name={pm.icon} size={20} color={active ? "#7FA8D8" : pm.accent} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.optionLabel, { color: active ? "#fff" : textPrimary }]}>{pm.label}</Text>
-                      <Text style={[styles.optionSub, { color: active ? "rgba(255,255,255,0.6)" : textMuted }]}>{pm.sub}</Text>
+                      <Text style={[styles.optionLabel, { color: active && available ? "#fff" : textPrimary }]}>{pm.label}</Text>
+                      <Text style={[styles.optionSub, { color: active && available ? "rgba(255,255,255,0.6)" : textMuted }]}>{pm.sub}</Text>
                     </View>
-                    {active && <Feather name="check-circle" size={18} color="#059669" />}
+                    {!available ? (
+                      <Text style={[styles.optionSub, { color: textMuted }]}>Not configured</Text>
+                    ) : active ? (
+                      <Feather name="check-circle" size={18} color="#059669" />
+                    ) : null}
                   </Pressable>
                 );
               })}
 
               {/* Account Details Card */}
+              {currentPaymentAccount.number && currentPaymentAccount.name ? (
               <View style={[styles.accountCard, { backgroundColor: paymentMethod === "telebirr" ? "#059669" + "10" : "#1E40AF" + "10", borderColor: paymentMethod === "telebirr" ? "#059669" + "30" : "#1E40AF" + "30" }]}>
                 <View style={styles.accountHeader}>
                   <Feather name={paymentMethod === "telebirr" ? "smartphone" : "credit-card"} size={20} color={paymentMethod === "telebirr" ? "#059669" : "#1E40AF"} />
@@ -686,10 +738,10 @@ export default function BookingScreen() {
                 </View>
                 <View style={styles.accountNumberRow}>
                   <Text style={[styles.accountNumber, { color: textPrimary }]}>
-                    {paymentMethod === "telebirr" ? paymentAccounts.telebirr.number : paymentAccounts.cbe.number}
+                    {currentPaymentAccount.number}
                   </Text>
                   <Pressable
-                    onPress={() => copyToClipboard(paymentMethod === "telebirr" ? paymentAccounts.telebirr.number : paymentAccounts.cbe.number, paymentMethod === "telebirr" ? "Telebirr number" : "CBE account number")}
+                    onPress={() => copyToClipboard(currentPaymentAccount.number, paymentMethod === "telebirr" ? "Telebirr number" : "CBE account number")}
                     style={[styles.copyBtn, { backgroundColor: paymentMethod === "telebirr" ? "#059669" : "#1E40AF" }]}
                   >
                     <Feather name="copy" size={14} color="#fff" />
@@ -697,9 +749,15 @@ export default function BookingScreen() {
                   </Pressable>
                 </View>
                 <Text style={[styles.accountName, { color: textMuted }]}>
-                  Account Name: {paymentMethod === "telebirr" ? paymentAccounts.telebirr.name : paymentAccounts.cbe.name}
+                  Account Name: {currentPaymentAccount.name}
                 </Text>
               </View>
+              ) : (
+                <View style={[styles.instructionsCard, { backgroundColor: isDark ? "rgba(220,38,38,0.08)" : "#FEF2F2", borderColor: "#DC262630" }]}>
+                  <Text style={[styles.instrTitle, { color: "#DC2626" }]}>No payment account configured</Text>
+                  <Text style={[styles.instrText, { color: textMuted }]}>Please contact support or try again after an administrator adds a payment account.</Text>
+                </View>
+              )}
 
               {/* Payment Instructions */}
               <View style={[styles.instructionsCard, { backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "#F0F9FF", borderColor: "#315d93" + "30" }]}>
@@ -725,7 +783,7 @@ export default function BookingScreen() {
               {proofImage ? (
                 <View style={{ gap: 10 }}>
                   <Image source={{ uri: proofImage.uri }} style={styles.proofPreview} resizeMode="cover" />
-                  <Pressable onPress={() => setProofImage(null)} style={[styles.removeBtn, { borderColor: "#DC2626" + "40" }]}>
+                  <Pressable onPress={() => { setProofImage(null); setPaymentRecipientSnapshot(null); }} style={[styles.removeBtn, { borderColor: "#DC2626" + "40" }]}>
                     <Feather name="x" size={14} color="#DC2626" />
                     <Text style={[styles.removeBtnText, { color: "#DC2626" }]}>Remove & re-upload</Text>
                   </Pressable>
@@ -758,8 +816,8 @@ export default function BookingScreen() {
               {/* Submit */}
               <Pressable
                 onPress={handleSubmitPayment}
-                disabled={submitting}
-                style={({ pressed }) => [styles.submitBtn, { backgroundColor: "#315d93", opacity: pressed || submitting ? 0.85 : 1, shadowColor: "#315d93", shadowOpacity: 0.4, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12 }]}
+                disabled={submitting || !currentPaymentAccount.number || !currentPaymentAccount.name}
+                style={({ pressed }) => [styles.submitBtn, { backgroundColor: "#315d93", opacity: pressed || submitting || !currentPaymentAccount.number || !currentPaymentAccount.name ? 0.6 : 1, shadowColor: "#315d93", shadowOpacity: 0.4, shadowOffset: { width: 0, height: 4 }, shadowRadius: 12 }]}
               >
                 <Feather name="send" size={20} color="#fff" />
                 <Text style={styles.submitBtnText}>{submitting ? "Submitting…" : "Submit Payment for Verification"}</Text>
