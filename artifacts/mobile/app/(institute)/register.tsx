@@ -25,6 +25,12 @@ import {
   deleteUpload,
   createNotification,
 } from "@/lib/supabase";
+import {
+  captureCurrentDeviceLocation,
+  type CapturedDeviceLocation,
+  DeviceLocationError,
+  openLocationSettings,
+} from "@/lib/deviceLocation";
 
 type Step = 1 | 2 | 3;
 
@@ -70,6 +76,8 @@ export default function InstituteRegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [location, setLocation] = useState<CapturedDeviceLocation | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
 
   const bg = colors.isDark ? colors.background : "#FFFFFF";
   const textPrimary = colors.isDark ? "#FFFFFF" : "#202937";
@@ -107,7 +115,34 @@ export default function InstituteRegisterScreen() {
     }
   };
 
-  const handleNext = () => {
+  const captureRequiredLocation = async () => {
+    setLocationLoading(true);
+    try {
+      const nextLocation = await captureCurrentDeviceLocation();
+      setLocation(nextLocation);
+      return nextLocation;
+    } catch (error) {
+      const locationError = error instanceof DeviceLocationError ? error : null;
+      const buttons =
+        locationError?.code === "permission-blocked" && Platform.OS !== "web"
+          ? [
+              { text: "Cancel", style: "cancel" as const },
+              { text: "Open Settings", onPress: () => void openLocationSettings() },
+            ]
+          : [{ text: "OK" }];
+      Alert.alert(
+        "Location Required",
+        locationError?.message ??
+          "The institute's real location is required so it can appear on the map.",
+        buttons,
+      );
+      return null;
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  const handleNext = async () => {
     if (step === 1) {
       if (!category) { Alert.alert("Select category", "Please select your institute category."); return; }
       setStep(2);
@@ -116,6 +151,8 @@ export default function InstituteRegisterScreen() {
       if (!validateEmail(form.email) || !validatePassword(form.password)) return;
       if (!form.phone.trim()) { Alert.alert("Missing fields", "Please enter a contact phone number."); return; }
       if (!form.city) { Alert.alert("Missing fields", "Please select your city."); return; }
+      const captured = location ?? await captureRequiredLocation();
+      if (!captured) return;
       setStep(3);
     }
   };
@@ -125,6 +162,8 @@ export default function InstituteRegisterScreen() {
       Alert.alert("License required", "Please upload your operating licence or registration certificate.");
       return;
     }
+    const registeredLocation = location ?? await captureRequiredLocation();
+    if (!registeredLocation) return;
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
@@ -172,6 +211,8 @@ export default function InstituteRegisterScreen() {
           status: "Pending",
           licenseUploadId: licenseUpload?.id,
           services: [],
+          lat: registeredLocation.latitude,
+          lng: registeredLocation.longitude,
         });
       } catch (error) {
         if (licenseUpload) await deleteUpload(licenseUpload.id).catch(() => {});
@@ -398,6 +439,30 @@ export default function InstituteRegisterScreen() {
               Upload your Ministry of Health licence or official registration certificate. This will be reviewed by our admin team before your institute goes live.
             </Text>
 
+            <View style={[styles.locationCard, { backgroundColor: cardBg, borderColor: location ? "#059669" : borderCol }]}>
+              <View style={[styles.locationIcon, { backgroundColor: "#05966920" }]}>
+                <Feather name="map-pin" size={20} color="#059669" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.locationTitle, { color: textPrimary }]}>
+                  {location ? "Facility location captured" : "Location required"}
+                </Text>
+                <Text style={[styles.locationText, { color: textMuted }]}>
+                  {location
+                    ? `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}${location.accuracy ? ` · ±${Math.round(location.accuracy)} m` : ""}`
+                    : "Capture the location while physically at the healthcare facility."}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => void captureRequiredLocation()}
+                disabled={locationLoading}
+                testID="refresh-institute-location"
+                style={styles.locationRefresh}
+              >
+                <Feather name={locationLoading ? "loader" : "crosshair"} size={19} color={accentColor} />
+              </Pressable>
+            </View>
+
             <Pressable
               onPress={pickDocument}
               style={[styles.uploadArea, { backgroundColor: cardBg, borderColor: licenseFile ? "#059669" : borderCol }]}
@@ -437,9 +502,9 @@ export default function InstituteRegisterScreen() {
 
         {/* Navigation buttons */}
         {step < 3 ? (
-          <Pressable onPress={handleNext} style={[styles.nextBtn, { backgroundColor: accentColor }]}>
+          <Pressable onPress={() => void handleNext()} disabled={locationLoading} style={[styles.nextBtn, { backgroundColor: accentColor, opacity: locationLoading ? 0.7 : 1 }]}>
             <Text style={styles.nextBtnText}>
-              {step === 1 ? "Next: Institute Details" : "Next: Upload Licence"}
+              {locationLoading ? "Getting GPS Location…" : step === 1 ? "Next: Institute Details" : "Next: Upload Licence"}
             </Text>
             <Feather name="arrow-right" size={18} color="#fff" />
           </Pressable>
@@ -493,6 +558,11 @@ const styles = StyleSheet.create({
   summaryValue: { fontSize: 13, fontFamily: "Inter_600SemiBold", flex: 1, textAlign: "right" },
   infoCard: { flexDirection: "row", gap: 10, padding: 14, borderRadius: 12, borderWidth: 1, alignItems: "flex-start" },
   infoText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 },
+  locationCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
+  locationIcon: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
+  locationTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  locationText: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 18, marginTop: 2 },
+  locationRefresh: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   nextBtn: { borderRadius: 14, height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   nextBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
   successContainer: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 },

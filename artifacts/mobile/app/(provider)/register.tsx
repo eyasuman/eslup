@@ -19,6 +19,12 @@ import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import { signUp, signIn, signInWithPhone, signUpWithPhone, phoneToEmail, upsertDoctor, uploadMedicalLicense, createNotification } from "@/lib/supabase";
 import { PROVIDER_TYPES, SPECIALTIES_BY_TYPE, type ProviderType } from "@/data/providerCategories";
+import {
+  captureCurrentDeviceLocation,
+  type CapturedDeviceLocation,
+  DeviceLocationError,
+  openLocationSettings,
+} from "@/lib/deviceLocation";
 
 type Step = 1 | 2 | 3;
 
@@ -56,6 +62,8 @@ export default function ProviderRegisterScreen() {
   const [passwordError, setPasswordError] = useState("");
   // Providers can choose to register/sign in with email or phone number
   const [authMethod, setAuthMethod] = useState<"email" | "phone">("email");
+  const [location, setLocation] = useState<CapturedDeviceLocation | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
 
   const bg = colors.isDark ? colors.background : "#FFFFFF";
   const textPrimary = colors.isDark ? "#FFFFFF" : "#202937";
@@ -105,7 +113,34 @@ export default function ProviderRegisterScreen() {
     }
   };
 
-  const handleNext = () => {
+  const captureRequiredLocation = async () => {
+    setLocationLoading(true);
+    try {
+      const nextLocation = await captureCurrentDeviceLocation();
+      setLocation(nextLocation);
+      return nextLocation;
+    } catch (error) {
+      const locationError = error instanceof DeviceLocationError ? error : null;
+      const buttons =
+        locationError?.code === "permission-blocked" && Platform.OS !== "web"
+          ? [
+              { text: "Cancel", style: "cancel" as const },
+              { text: "Open Settings", onPress: () => void openLocationSettings() },
+            ]
+          : [{ text: "OK" }];
+      Alert.alert(
+        "Location Required",
+        locationError?.message ??
+          "Your real location is required so patients can find you on the map.",
+        buttons,
+      );
+      return null;
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  const handleNext = async () => {
     if (step === 1) {
       if (!providerType) { Alert.alert("Select type", "Please select your provider type."); return; }
       if (!specialty) { Alert.alert("Select specialty", "Please select a specialty."); return; }
@@ -116,11 +151,16 @@ export default function ProviderRegisterScreen() {
       const passwordOk = validatePassword(form.password);
       if (!idOk || !passwordOk) return;
       if (!form.city) { Alert.alert("Missing fields", "Please select your city/location."); return; }
+      const captured = location ?? await captureRequiredLocation();
+      if (!captured) return;
       setStep(3);
     }
   };
 
-  const doUpsertProfile = async (userId: string) => {
+  const doUpsertProfile = async (
+    userId: string,
+    registeredLocation: CapturedDeviceLocation,
+  ) => {
     const resolvedEmail = authMethod === "phone" ? phoneToEmail(form.phone) : form.email;
     await upsertDoctor({
       userId,
@@ -137,6 +177,8 @@ export default function ProviderRegisterScreen() {
       status: "Pending",
       serviceModes: { video: true, audio: false, inPerson: true, homeVisit: false },
       availability: [],
+      lat: registeredLocation.latitude,
+      lng: registeredLocation.longitude,
     });
     if (!licenseFile) throw new Error("A medical license is required.");
     const licenseUpload = await uploadMedicalLicense(userId, licenseFile);
@@ -161,6 +203,8 @@ export default function ProviderRegisterScreen() {
 
   const handleSubmit = async () => {
     if (!licenseFile) { Alert.alert("License required", "Please upload your medical license."); return; }
+    const registeredLocation = location ?? await captureRequiredLocation();
+    if (!registeredLocation) return;
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     try {
@@ -225,7 +269,7 @@ export default function ProviderRegisterScreen() {
       }
 
       // ── Step 2: Write provider profile to the `doctors` table ─────────────
-      await doUpsertProfile(userId);
+      await doUpsertProfile(userId, registeredLocation);
     } catch (err: any) {
       const msg: string = err?.message ?? String(err);
       if (msg.includes("row-level security") || msg.includes("violates") || msg.includes("policy")) {
@@ -495,6 +539,30 @@ export default function ProviderRegisterScreen() {
               Your license will be securely stored and reviewed by the admin team before your account is activated.
             </Text>
 
+            <View style={[styles.locationCard, { backgroundColor: cardBg, borderColor: location ? "#059669" : borderCol }]}>
+              <View style={[styles.locationIcon, { backgroundColor: "#05966920" }]}>
+                <Feather name="map-pin" size={20} color="#059669" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.locationTitle, { color: textPrimary }]}>
+                  {location ? "Real location captured" : "Location required"}
+                </Text>
+                <Text style={[styles.locationText, { color: textMuted }]}>
+                  {location
+                    ? `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}${location.accuracy ? ` · ±${Math.round(location.accuracy)} m` : ""}`
+                    : "Allow precise location so patients can see you on the map."}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => void captureRequiredLocation()}
+                disabled={locationLoading}
+                testID="refresh-provider-location"
+                style={styles.locationRefresh}
+              >
+                <Feather name={locationLoading ? "loader" : "crosshair"} size={19} color="#315d93" />
+              </Pressable>
+            </View>
+
             <Pressable
               onPress={pickDocument}
               style={[styles.uploadArea, { backgroundColor: cardBg, borderColor: licenseFile ? "#059669" : borderCol }]}
@@ -533,9 +601,9 @@ export default function ProviderRegisterScreen() {
         )}
 
         {step < 3 ? (
-          <Pressable onPress={handleNext} style={styles.nextBtn}>
+          <Pressable onPress={() => void handleNext()} disabled={locationLoading} style={[styles.nextBtn, { opacity: locationLoading ? 0.7 : 1 }]}>
             <Text style={styles.nextBtnText}>
-              {step === 1 ? "Next: Personal Info" : "Next: Upload License"}
+              {locationLoading ? "Getting GPS Location…" : step === 1 ? "Next: Personal Info" : "Next: Upload License"}
             </Text>
             <Feather name="arrow-right" size={18} color="#fff" />
           </Pressable>
@@ -592,6 +660,11 @@ const styles = StyleSheet.create({
   summaryValue: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   infoCard: { flexDirection: "row", gap: 10, padding: 14, borderRadius: 12, borderWidth: 1, alignItems: "flex-start" },
   infoText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 },
+  locationCard: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderRadius: 14, borderWidth: 1 },
+  locationIcon: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
+  locationTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  locationText: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 18, marginTop: 2 },
+  locationRefresh: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   methodToggle: { flexDirection: "row", borderRadius: 10, borderWidth: 1, overflow: "hidden" },
   methodBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 8 },
   methodBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },

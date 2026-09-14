@@ -23,7 +23,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "pulse",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "PULSE uses your location to find nearby healthcare providers.",
+        "NSLocationWhenInUseUsageDescription": "PULSE uses your location to find nearby healthcare services and to verify provider and institute map locations during registration.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -64,7 +64,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "PULSE uses your location to find nearby healthcare providers."
+          "locationAlwaysAndWhenInUsePermission": "PULSE uses your location to find nearby healthcare services and to verify provider and institute map locations during registration."
         }
       ]
     ],

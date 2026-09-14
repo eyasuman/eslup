@@ -12,7 +12,13 @@ import {
   subscribeToInstituteStatusChanges,
   unsubscribeChannel,
   upsertInstitution,
+  updateInstitutionLocation,
 } from "@/lib/supabase";
+import {
+  captureCurrentDeviceLocation,
+  DeviceLocationError,
+  openLocationSettings,
+} from "@/lib/deviceLocation";
 
 const INSTITUTE_CATEGORIES = [
   "Hospital", "Clinic", "Laboratory", "Pharmacy", "Imaging", 
@@ -40,6 +46,7 @@ export default function InstituteDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
   
   const [institutionId, setInstitutionId] = useState("");
   const [activeTab, setActiveTab] = useState<"overview" | "profile" | "services">("overview");
@@ -132,12 +139,6 @@ export default function InstituteDashboardScreen() {
       Alert.alert("Missing Information", "Institute name, phone, and city are required.");
       return;
     }
-    const hasLatitude = form.lat.trim().length > 0;
-    const hasLongitude = form.lng.trim().length > 0;
-    if (hasLatitude !== hasLongitude) {
-      Alert.alert("Incomplete Location", "Enter both latitude and longitude, or leave both blank.");
-      return;
-    }
     setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
@@ -180,6 +181,38 @@ export default function InstituteDashboardScreen() {
       Alert.alert("Save Failed", error?.message ?? "Could not save your institute profile.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const refreshLocation = async () => {
+    if (!user?.id) return;
+    setLocationLoading(true);
+    try {
+      const location = await captureCurrentDeviceLocation();
+      await updateInstitutionLocation(user.id, location.latitude, location.longitude);
+      setForm((current) => ({
+        ...current,
+        lat: location.latitude.toString(),
+        lng: location.longitude.toString(),
+      }));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Location Updated", "Your real facility location is now visible on the PULSE map.");
+    } catch (error) {
+      const locationError = error instanceof DeviceLocationError ? error : null;
+      const buttons =
+        locationError?.code === "permission-blocked" && Platform.OS !== "web"
+          ? [
+              { text: "Cancel", style: "cancel" as const },
+              { text: "Open Settings", onPress: () => void openLocationSettings() },
+            ]
+          : [{ text: "OK" }];
+      Alert.alert(
+        "Location Update Failed",
+        locationError?.message ?? (error as Error)?.message ?? "Could not update the facility location.",
+        buttons,
+      );
+    } finally {
+      setLocationLoading(false);
     }
   };
   
@@ -413,29 +446,25 @@ export default function InstituteDashboardScreen() {
                 />
               </View>
               
-              <View style={styles.rowInputs}>
-                <View style={[styles.inputWrap, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: textMuted }]}>Latitude</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: inputBg, borderColor: borderCol, color: textPrimary }]}
-                    value={form.lat}
-                    onChangeText={(v) => setForm(p => ({ ...p, lat: v }))}
-                    keyboardType="decimal-pad"
-                    placeholder="9.0300"
-                    placeholderTextColor={textMuted}
-                  />
+              <View style={[styles.gpsCard, { backgroundColor: inputBg, borderColor: form.lat && form.lng ? "#059669" : borderCol }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.inputLabel, { color: textPrimary }]}>Verified GPS Location</Text>
+                  <Text style={[styles.gpsText, { color: textMuted }]}>
+                    {form.lat && form.lng
+                      ? `${Number(form.lat).toFixed(6)}, ${Number(form.lng).toFixed(6)}`
+                      : "No real facility location has been captured yet."}
+                  </Text>
                 </View>
-                <View style={[styles.inputWrap, { flex: 1 }]}>
-                  <Text style={[styles.inputLabel, { color: textMuted }]}>Longitude</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: inputBg, borderColor: borderCol, color: textPrimary }]}
-                    value={form.lng}
-                    onChangeText={(v) => setForm(p => ({ ...p, lng: v }))}
-                    keyboardType="decimal-pad"
-                    placeholder="38.7400"
-                    placeholderTextColor={textMuted}
-                  />
-                </View>
+                <Pressable
+                  onPress={() => void refreshLocation()}
+                  disabled={locationLoading}
+                  testID="update-institute-gps"
+                  style={[styles.gpsButton, { backgroundColor: accentColor, opacity: locationLoading ? 0.7 : 1 }]}
+                >
+                  {locationLoading
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Feather name="crosshair" size={18} color="#fff" />}
+                </Pressable>
               </View>
             </View>
           </View>
@@ -655,6 +684,27 @@ const styles = StyleSheet.create({
   rowInputs: {
     flexDirection: "row",
     gap: 12,
+  },
+  gpsCard: {
+    minHeight: 76,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  gpsText: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    marginTop: 4,
+  },
+  gpsButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
   },
   chipRow: {
     gap: 8,

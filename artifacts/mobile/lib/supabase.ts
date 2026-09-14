@@ -1460,6 +1460,17 @@ export async function upsertInstitution(inst: Institution) {
   if (error) throw error;
 }
 
+export async function updateInstitutionLocation(userId: string, lat: number, lng: number) {
+  if (!isValidLocationCoordinates(lat, lng)) {
+    throw new Error("Institute location requires a valid latitude and longitude.");
+  }
+  const { error } = await supabase
+    .from("institute_pulse")
+    .update({ lat, lng, updatedAt: new Date().toISOString() })
+    .eq("userId", userId);
+  if (error) throw error;
+}
+
 export async function uploadInstituteLicense(
   userId: string,
   file: { name: string; uri: string; type: string; size?: number }

@@ -6,11 +6,12 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { Feather } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useState } from "react";
-import { I18nManager, Platform, View } from "react-native";
+import { Alert, I18nManager, Platform, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
@@ -20,7 +21,19 @@ import { IncomingCallModal } from "@/components/IncomingCallModal";
 import { LanguageOnboarding } from "@/components/LanguageOnboarding";
 import { SplashAnimation } from "@/components/SplashAnimation";
 import { AppProvider, useApp, Language } from "@/context/AppContext";
-import { getCurrentSession } from "@/lib/supabase";
+import {
+  getCurrentSession,
+  getDoctorByUserId,
+  getInstitutionByUserId,
+  updateDoctorLocation,
+  updateInstitutionLocation,
+} from "@/lib/supabase";
+import {
+  captureCurrentDeviceLocation,
+  DeviceLocationError,
+  openLocationSettings,
+} from "@/lib/deviceLocation";
+import { isValidLocationCoordinates } from "@/lib/mapLocations";
 
 setBaseUrl(
   process.env.EXPO_PUBLIC_DOMAIN
@@ -46,6 +59,57 @@ function AppShell() {
   useEffect(() => {
     I18nManager.allowRTL(isRTL);
   }, [isRTL]);
+
+  useEffect(() => {
+    if (isSessionLoading || !user?.id || !userRole) return;
+
+    let active = true;
+    const promptKey = `pulse:location-prompted:${user.id}`;
+
+    const requestLocation = async () => {
+      const alreadyPrompted = await AsyncStorage.getItem(promptKey);
+      if (alreadyPrompted === "true" || !active) return;
+
+      try {
+        const location = await captureCurrentDeviceLocation();
+        if (!active) return;
+
+        if (userRole === "provider") {
+          const provider = await getDoctorByUserId(user.id);
+          if (!isValidLocationCoordinates(provider?.lat, provider?.lng)) {
+            await updateDoctorLocation(user.id, location.latitude, location.longitude);
+          }
+        } else if (userRole === "institute") {
+          const institute = await getInstitutionByUserId(user.id);
+          if (!isValidLocationCoordinates(institute?.lat, institute?.lng)) {
+            await updateInstitutionLocation(user.id, location.latitude, location.longitude);
+          }
+        }
+        await AsyncStorage.setItem(promptKey, "true");
+      } catch (error) {
+        if (!active) return;
+        const locationError = error instanceof DeviceLocationError ? error : null;
+        const buttons =
+          locationError?.code === "permission-blocked" && Platform.OS !== "web"
+            ? [
+                { text: "Not now", style: "cancel" as const },
+                { text: "Open Settings", onPress: () => void openLocationSettings() },
+              ]
+            : [{ text: "OK" }];
+        Alert.alert(
+          "Enable Location",
+          locationError?.message ??
+            "Allow location access to find nearby healthcare services.",
+          buttons,
+        );
+      }
+    };
+
+    void requestLocation();
+    return () => {
+      active = false;
+    };
+  }, [isSessionLoading, user?.id, userRole]);
 
   // Show language onboarding on first visit (after session has restored)
   if (!isSessionLoading && hasPickedLanguage === false) {
